@@ -59,6 +59,10 @@ This folder is the volleyball logic, with no screens or database, so it's easy t
 | `record.ts` | `recordAction()`, `recordFollowUp()`, `recordUndo()`: turn a tap into a saved event, after checking it with `replay()` |
 | `undo.ts` | `activeEvents()`: the events that still count after undos |
 
+| `boxScore.ts` | Per-player stats counted from the events (written by hand, test-first: see below) |
+
+**Box score status:** `boxScore.ts` was written test-first. The tests in `boxScore.test.ts` came first, and the functions are being written to pass them. Until they're done, `npm test` reports those tests as failing.
+
 `app/src/test/matchScript.ts` is a test helper that plays out a match tap by tap, e.g. `new MatchScript().startSet().point('us', 3)`.
 
 ## Repository layout
