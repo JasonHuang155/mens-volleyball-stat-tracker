@@ -80,6 +80,21 @@ Everything is saved on the phone in IndexedDB, the database built into every bro
 
 Each tap is checked and saved inside one database transaction. Transactions on the same table run one at a time, so two fast taps can't get the same `seq` number. Tests use `fake-indexeddb`, a pretend IndexedDB that runs in Node (`app/src/test/setup.ts`).
 
+## Screens (`app/src/screens/`)
+
+| Address | Screen |
+|---|---|
+| `/` | Home: create your team, or open its roster |
+| `/teams/:teamId` | Roster: add players (number, name, position), tap a player to edit or delete them |
+
+Screens read from the database with `useLiveQuery` (from `dexie-react-hooks`), which re-reads whenever the data changes, so what's on screen always matches what's saved. Screen tests (`*.test.tsx`) use React Testing Library: they render the app in a pretend browser (jsdom), then type and tap the way a person would. `app/src/test/renderApp.tsx` sets that up.
+
+Phone-friendly details:
+- Everything you tap is at least 56px tall, and text boxes use 16px+ text so iPhones don't zoom in when you tap one.
+- Double-tap zoom is turned off (`touch-action: manipulation`), so fast taps don't zoom the page. Pinch-to-zoom still works.
+- The jersey number box brings up the number keypad. After adding a player, the form clears and jumps back to it, ready for the next player.
+- Deleting a player takes two taps ("Delete", then "Tap again to delete"), so a stray tap can't remove anyone.
+
 `app/src/test/matchScript.ts` is a test helper that plays out a match tap by tap, e.g. `new MatchScript().startSet().point('us', 3)`.
 
 ## Repository layout
@@ -127,6 +142,8 @@ It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve ty
 | `replay()` throws on impossible taps, and recording checks every tap with it | One place defines the rules. A tap that breaks them is never saved |
 | Rotations named by the setter's position | The convention coaches use, so rotation 3 means the same thing in every set |
 | Dexie for IndexedDB | IndexedDB's own interface is clunky; Dexie makes it a few readable lines and can refresh the screen when data changes |
+| React Router for screens | Each screen gets its own web address, which Phase 2's shareable live box score link needs |
+| The Phase 1 screens manage one team | It's what one stat keeper needs. The database already supports several teams, ready for Phase 2 accounts |
 | Players can't be deleted once they've played | Their events would point at nobody, breaking box scores and Phase 3 season stats |
 | `uuid` library for ids | The browser's built-in `crypto.randomUUID()` only works on https or localhost, and testing on a phone over Wi-Fi is neither |
 | React + TypeScript + Vite | Industry-standard frontend stack; TypeScript catches mistakes like a misspelled stat name before the app runs |

@@ -1,9 +1,14 @@
+import { Route, Routes } from 'react-router'
+import HomeScreen from './screens/HomeScreen.tsx'
+import RosterScreen from './screens/RosterScreen.tsx'
+
+// Which screen to show for each web address.
 function App() {
   return (
-    <main>
-      <h1>Volleyball Stat Tracker</h1>
-      <p>Phase 1 in progress. The stat entry screens arrive in later steps.</p>
-    </main>
+    <Routes>
+      <Route path="/" element={<HomeScreen />} />
+      <Route path="/teams/:teamId" element={<RosterScreen />} />
+    </Routes>
   )
 }
 
