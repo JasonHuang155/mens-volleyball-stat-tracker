@@ -42,6 +42,25 @@ Substitutions and the libero:
 - The libero can't play in the front row. When they would rotate into position 4, the app brings the player they replaced back in automatically.
 - Phase 1 doesn't enforce substitution limits or libero serving rules.
 
+Plays with two players, and Undo (code: `app/src/domain/record.ts`, `undo.ts`):
+
+- Some plays credit more than one player: the setter's assist on a kill, or two or three blockers on a block assist. The extra players are added as **follow-up** events that join the same play, so the play still scores one point.
+- Undo cancels the whole last play (a kill and its assist together). Pressing it again goes back one more play. Only the last play can be undone, because changing an older point would change who served and the rotation for everything after it.
+
+## Code tour (`app/src/domain/`)
+
+This folder is the volleyball logic, with no screens or database, so it's easy to test.
+
+| File | What it does |
+|---|---|
+| `types.ts` | What every event and the match state look like |
+| `rules.ts` | Who gets the point; set and match win rules |
+| `replay.ts` | `replay()`: plays back the events to rebuild score, server, rotation, and lineup |
+| `record.ts` | `recordAction()`, `recordFollowUp()`, `recordUndo()`: turn a tap into a saved event, after checking it with `replay()` |
+| `undo.ts` | `activeEvents()`: the events that still count after undos |
+
+`app/src/test/matchScript.ts` is a test helper that plays out a match tap by tap, e.g. `new MatchScript().startSet().point('us', 3)`.
+
 ## Repository layout
 
 ```
@@ -81,6 +100,12 @@ It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve ty
 |---|---|
 | Save taps (events), compute stats | Undo is safe, stats can't drift, and sync/warehouse loading become "copy new rows" |
 | Undo adds an event instead of deleting | The event list only grows, so syncing it in Phase 2 never has to handle deletions |
+| Each event has a `seq` number | Phone clocks can give two taps the same timestamp; `seq` gives an exact order |
+| Each event has an `actionId` | Groups the events from one play, so a kill and its assist score once and undo together |
+| Events record the serving team and rotation at the time of the tap | The app could recompute them, but SQL in Phase 3 would have to replay the whole match. Stamping them makes "sideout % by rotation" a simple GROUP BY, and gives the Phase 3 data tests something to check |
+| `replay()` throws on impossible taps, and recording checks every tap with it | One place defines the rules. A tap that breaks them is never saved |
+| Rotations named by the setter's position | The convention coaches use, so rotation 3 means the same thing in every set |
+| `uuid` library for ids | The browser's built-in `crypto.randomUUID()` only works on https or localhost, and testing on a phone over Wi-Fi is neither |
 | React + TypeScript + Vite | Industry-standard frontend stack; TypeScript catches mistakes like a misspelled stat name before the app runs |
 | Vitest for tests | Built for Vite, so tests use the same setup as the app |
 | npm | Comes with Node, nothing extra to install |

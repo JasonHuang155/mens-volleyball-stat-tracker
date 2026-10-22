@@ -83,6 +83,9 @@ export type SubstitutionBody = {
 /** Cancels every event in one earlier action. Nothing is ever deleted. */
 export type UndoBody = { type: 'undo'; detail: { voidsActionId: string } }
 
+/** A second player's credit on a play that just scored: the assist on a kill, or another blocker. */
+export type FollowUpBody = AssistBody | (BlockBody & { result: 'assist' })
+
 export type EventBody = StatBody | SetStartBody | SubstitutionBody | UndoBody
 export type EventType = EventBody['type']
 

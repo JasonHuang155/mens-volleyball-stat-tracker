@@ -1,6 +1,6 @@
-import { recordAction } from '../domain/record.ts'
+import { recordAction, recordFollowUp, recordUndo } from '../domain/record.ts'
 import { replay } from '../domain/replay.ts'
-import type { BestOf, EventBody, MatchEvent, SetStartBody, Team } from '../domain/types.ts'
+import type { BestOf, EventBody, FollowUpBody, MatchEvent, SetStartBody, Team } from '../domain/types.ts'
 
 /** p1 starts in position 1 (serving), p2 in position 2, ... p6 in position 6. */
 export const LINEUP = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6']
@@ -31,6 +31,21 @@ export class MatchScript {
   record(body: EventBody): this {
     this.events = [...this.events, recordAction(this.match, this.events, body)]
     return this
+  }
+
+  followUp(body: FollowUpBody): this {
+    this.events = [...this.events, recordFollowUp(this.match, this.events, body)]
+    return this
+  }
+
+  undo(): this {
+    const event = recordUndo(this.match, this.events)
+    if (event) this.events = [...this.events, event]
+    return this
+  }
+
+  kill(playerId: string): this {
+    return this.record({ type: 'attack', playerId, result: 'kill', detail: { row: 'front' } })
   }
 
   /** Starts a set with LINEUP, p1 as setter, no libero, and us serving, unless told otherwise. */

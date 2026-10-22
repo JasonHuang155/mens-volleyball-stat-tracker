@@ -1,4 +1,5 @@
 import { matchWinner, pointWinner, setWinner } from './rules.ts'
+import { activeEvents } from './undo.ts'
 import type {
   Match,
   MatchEvent,
@@ -17,9 +18,19 @@ import type {
  */
 export function replay(match: Pick<Match, 'bestOf'>, events: MatchEvent[]): MatchState {
   const state = initialState()
-  const ordered = [...events].sort((a, b) => a.seq - b.seq)
+  const pointsByAction = new Map<string, Team>()
 
-  for (const event of ordered) {
+  for (const event of activeEvents(events)) {
+    // A follow-up tap (the assist on a kill, the second blocker on a block assist)
+    // joins a play that already scored. Its player gets credit, but the score
+    // doesn't change again.
+    const alreadyScoredFor = pointsByAction.get(event.actionId)
+    if (alreadyScoredFor) {
+      const winner = pointWinner(event)
+      if (winner && winner !== alreadyScoredFor) fail(event, 'one play can only give the point to one team')
+      continue
+    }
+
     switch (event.type) {
       case 'set_start':
         startSet(state, event)
@@ -30,8 +41,7 @@ export function replay(match: Pick<Match, 'bestOf'>, events: MatchEvent[]): Matc
         else substitute(state, event)
         break
       case 'undo':
-        fail(event, 'not supported yet')
-        break
+        break // activeEvents already left these out
       default: {
         requirePlaying(state, event)
         if (event.type === 'serve') {
@@ -39,7 +49,10 @@ export function replay(match: Pick<Match, 'bestOf'>, events: MatchEvent[]): Matc
           if (event.playerId !== state.lineup[0]) fail(event, 'only the player in position 1 can serve')
         }
         const winner = pointWinner(event)
-        if (winner) awardPoint(state, winner, match.bestOf)
+        if (winner) {
+          pointsByAction.set(event.actionId, winner)
+          awardPoint(state, winner, match.bestOf)
+        }
       }
     }
   }
