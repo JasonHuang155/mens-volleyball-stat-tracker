@@ -197,6 +197,20 @@ function requirePlaying(state: MatchState, event: MatchEvent) {
   if (state.status === 'finished') fail(event, 'the match is over')
 }
 
-function fail(event: MatchEvent, message: string): never {
-  throw new Error(`Event #${event.seq} (${event.type}): ${message}`)
+/**
+ * A tap that breaks the rules. `message` says which event (for debugging);
+ * `reason` is the plain explanation the screen shows.
+ */
+export class RuleError extends Error {
+  reason: string
+
+  constructor(event: MatchEvent, reason: string) {
+    super(`Event #${event.seq} (${event.type}): ${reason}`)
+    this.name = 'RuleError'
+    this.reason = reason
+  }
+}
+
+function fail(event: MatchEvent, reason: string): never {
+  throw new RuleError(event, reason)
 }

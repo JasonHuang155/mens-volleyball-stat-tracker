@@ -75,6 +75,10 @@ h2 {
   gap: 12px;
 }
 
+.card > p {
+  margin: 0; /* the card's gap already spaces things out */
+}
+
 .muted {
   color: var(--muted);
   margin: 0;
@@ -138,7 +142,9 @@ h2 {
   color: var(--muted);
 }
 
-.field input {
+.field input,
+.field select,
+.court-pick select {
   min-height: var(--tap);
   padding: 0 12px;
   border: 1px solid var(--border);
@@ -182,6 +188,10 @@ h2 {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
+}
+
+.segmented-2 {
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .segmented legend {
@@ -255,6 +265,161 @@ h2 {
 }
 
 .roster-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Hidden on screen, but read out by screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- Match list ---- */
+
+.match-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.match-row {
+  min-height: var(--tap);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.match-opponent {
+  font-weight: 600;
+}
+
+.match-date {
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+}
+
+/* ---- Scoreboard ---- */
+
+.scoreboard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.scoreboard-label {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.score-row {
+  display: grid;
+  grid-template-columns: 1fr 40px 64px;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.serve-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.serve-dot-off {
+  background: transparent;
+}
+
+.score-sets {
+  color: var(--muted);
+  text-align: center;
+}
+
+.score-points {
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Court ---- */
+
+.court {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.court-net {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  border-bottom: 3px solid var(--border);
+  padding-bottom: 2px;
+}
+
+.court-slot {
+  min-width: 0;
+}
+
+.court-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.court-pick select {
+  width: 100%;
+  padding: 0 6px;
+  font-size: 1rem;
+}
+
+.court-position {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.court-player {
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+}
+
+.court-name {
+  font-size: 0.85rem;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

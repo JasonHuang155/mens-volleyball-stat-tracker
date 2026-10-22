@@ -84,8 +84,18 @@ Each tap is checked and saved inside one database transaction. Transactions on t
 
 | Address | Screen |
 |---|---|
-| `/` | Home: create your team, or open its roster |
+| `/` | Home: create your team, start a new match, open the roster, and see every match with where it stands ("Set 2 · 12–10", "Won 3–1") |
 | `/teams/:teamId` | Roster: add players (number, name, position), tap a player to edit or delete them |
+| `/teams/:teamId/new-match` | New match: opponent and best of 3 or 5 |
+| `/matches/:matchId` | The match: scoreboard, then the lineup form before each set, or the set being played |
+
+The lineup form, shown before every set:
+- Six spots laid out like the court (net at the top: 4, 3, 2 in front, 5, 6, 1 behind). A player can only be picked for one spot.
+- The setter and libero are guessed from roster positions (S and L) and can be changed. It shows which rotation that lineup starts in.
+- From set 2 on, it starts with the previous set's lineup, and the other team serves first (teams alternate serving first each set). Check the first serve for the deciding set, which is decided by a coin toss.
+- A wrong lineup can be fixed with Undo after the set starts.
+
+When a tap breaks a rule, the screen shows the plain reason ("No set is in progress"). The volleyball logic throws a `RuleError` that carries both that reason and the event details for debugging.
 
 Screens read from the database with `useLiveQuery` (from `dexie-react-hooks`), which re-reads whenever the data changes, so what's on screen always matches what's saved. Screen tests (`*.test.tsx`) use React Testing Library: they render the app in a pretend browser (jsdom), then type and tap the way a person would. `app/src/test/renderApp.tsx` sets that up.
 

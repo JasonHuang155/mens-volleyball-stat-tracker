@@ -2,9 +2,12 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { errorMessage } from '../components/errorMessage.ts'
+import { matchSummary } from '../components/matchSummary.ts'
 import { playerCount } from '../components/playerCount.ts'
 import { db } from '../db/database.ts'
+import { getEvents, listMatches } from '../db/matches.ts'
 import { createTeam, listPlayers, listTeams } from '../db/roster.ts'
+import { replay } from '../domain/replay.ts'
 import type { Team } from '../domain/types.ts'
 
 // useLiveQuery reads from the database and re-reads whenever the data changes,
@@ -19,7 +22,14 @@ function HomeScreen() {
   return (
     <main className="screen">
       <h1>Volleyball Stat Tracker</h1>
-      {team ? <TeamCard team={team} /> : <CreateTeamForm />}
+      {team ? (
+        <>
+          <TeamCard team={team} />
+          <MatchList />
+        </>
+      ) : (
+        <CreateTeamForm />
+      )}
     </main>
   )
 }
@@ -30,9 +40,40 @@ function TeamCard({ team }: { team: Team }) {
     <section className="card">
       <h2>{team.name}</h2>
       <p className="muted">{players === undefined ? '' : playerCount(players.length)}</p>
-      <Link className="button" to={`/teams/${team.id}`}>
-        Roster
-      </Link>
+      <div className="button-row">
+        <Link className="button button-primary" to={`/teams/${team.id}/new-match`}>
+          New match
+        </Link>
+        <Link className="button" to={`/teams/${team.id}`}>
+          Roster
+        </Link>
+      </div>
+    </section>
+  )
+}
+
+function MatchList() {
+  // Each match's standing is worked out by replaying its events.
+  const matches = useLiveQuery(async () => {
+    const all = await listMatches(db)
+    return Promise.all(all.map(async (match) => ({ match, state: replay(match, await getEvents(db, match.id)) })))
+  })
+  if (matches === undefined || matches.length === 0) return null
+
+  return (
+    <section>
+      <h2>Matches</h2>
+      <ul className="match-list" aria-label="Matches">
+        {matches.map(({ match, state }) => (
+          <li key={match.id}>
+            <Link className="match-row" to={`/matches/${match.id}`}>
+              <span className="match-opponent">vs {match.opponentName}</span>
+              <span className="muted">{matchSummary(state)}</span>
+              <span className="muted match-date">{new Date(match.createdAt).toLocaleDateString()}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }
