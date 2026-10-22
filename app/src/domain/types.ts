@@ -104,3 +104,33 @@ export interface EventBase {
 }
 
 export type MatchEvent = EventBase & EventBody
+
+// ---- What replaying the events produces ----
+
+export interface SetScore {
+  us: number
+  them: number
+  winner: Team | null
+}
+
+export type MatchStatus = 'waiting_for_lineup' | 'playing' | 'finished'
+
+/** Everything the app shows about a match. Never saved: always rebuilt from the events. */
+export interface MatchState {
+  status: MatchStatus
+  /** The current set, or the last one played. 0 before the first set starts. */
+  setNumber: number
+  rallyNumber: number
+  sets: SetScore[]
+  setsWon: Record<Team, number>
+  winner: Team | null
+  servingTeam: Team
+  /** Our player serving right now, or null when they're serving. */
+  serverId: string | null
+  /** Player ids on court in positions 1-6 (index 0 = position 1). */
+  lineup: string[]
+  liberoId: string | null
+  /** The player the libero is in for, or null if the libero is on the bench. */
+  liberoReplacing: string | null
+  rotation: Rotation
+}

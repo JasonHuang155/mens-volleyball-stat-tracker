@@ -28,6 +28,13 @@ Who gets the point (code: `app/src/domain/rules.ts`):
 
 Sets go to 25, win by 2. The deciding set (set 3 of a best of 3, set 5 of a best of 5) goes to 15, win by 2. There's no cap, so 33–31 is a legal score.
 
+Serving and rotation (code: `app/src/domain/replay.ts`):
+
+- Court positions are numbered 1–6: 1 is right back (the server), 2–4 are the front row, 5 and 6 are the back row.
+- If the serving team wins the rally, the same player serves again. If the receiving team wins (a **sideout**), it serves next.
+- When we side out, we rotate clockwise: position 2 moves to 1 and serves, and position 1 moves to 6.
+- Rotations are named the way coaches name them, by where the setter is: rotation 1 means the setter is in position 1. Each rotation moves the setter back one spot, so a set goes rotation 1, 6, 5, 4, 3, 2, 1. We don't track the opponent's rotation.
+
 ## Repository layout
 
 ```
