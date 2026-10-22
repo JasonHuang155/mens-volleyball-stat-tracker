@@ -6,6 +6,7 @@ import type {
   Rotation,
   Row,
   SetStartBody,
+  SubstitutionBody,
   Team,
 } from './types.ts'
 
@@ -24,6 +25,10 @@ export function replay(match: Pick<Match, 'bestOf'>, events: MatchEvent[]): Matc
         startSet(state, event)
         break
       case 'substitution':
+        requirePlaying(state, event)
+        if (event.detail.kind === 'libero') swapLibero(state, event)
+        else substitute(state, event)
+        break
       case 'undo':
         fail(event, 'not supported yet')
         break
@@ -52,7 +57,12 @@ export function startingRotation(detail: SetStartBody['detail']): Rotation {
 export function courtRow(state: MatchState, playerId: string): Row | null {
   const index = state.lineup.indexOf(playerId)
   if (index === -1) return null
-  return index >= 1 && index <= 3 ? 'front' : 'back'
+  return isFrontRow(index) ? 'front' : 'back'
+}
+
+/** Lineup index 1-3 = court positions 2-4. */
+function isFrontRow(index: number) {
+  return index >= 1 && index <= 3
 }
 
 function initialState(): MatchState {
@@ -118,6 +128,55 @@ function rotate(state: MatchState) {
   state.lineup = [...state.lineup.slice(1), state.lineup[0]]
   // The setter moves from position p to p - 1, so rotations go 1, 6, 5, 4, 3, 2.
   state.rotation = (state.rotation === 1 ? 6 : state.rotation - 1) as Rotation
+
+  // The libero can't play in the front row. When they'd rotate into position 4,
+  // the player they replaced comes back automatically.
+  if (state.liberoReplacing && state.lineup[3] === state.liberoId) returnFromLibero(state)
+}
+
+/** A regular substitution: the new player takes the same spot in the rotation. */
+function substitute(state: MatchState, event: MatchEvent & SubstitutionBody) {
+  const playerIn = event.playerId
+  const playerOut = event.detail.playerOutId
+  if (playerIn === state.liberoId || playerOut === state.liberoId) {
+    fail(event, 'the libero goes in and out with a libero swap, not a substitution')
+  }
+  const index = state.lineup.indexOf(playerOut)
+  if (index === -1) fail(event, "the player going out isn't on court")
+  if (state.lineup.includes(playerIn)) fail(event, 'the player coming in is already on court')
+  if (playerIn === state.liberoReplacing) fail(event, 'that player can only come back in for the libero')
+
+  state.lineup[index] = playerIn
+}
+
+/** The libero comes in for a back-row player, or goes out for the player they replaced. */
+function swapLibero(state: MatchState, event: MatchEvent & SubstitutionBody) {
+  const playerIn = event.playerId
+  const playerOut = event.detail.playerOutId
+  if (!state.liberoId) fail(event, 'there is no libero this set')
+
+  if (playerIn === state.liberoId) {
+    if (state.liberoReplacing) fail(event, 'the libero is already on court')
+    const index = state.lineup.indexOf(playerOut)
+    if (index === -1) fail(event, "the player going out isn't on court")
+    if (isFrontRow(index)) fail(event, 'the libero can only replace a back-row player')
+    state.lineup[index] = state.liberoId
+    state.liberoReplacing = playerOut
+  } else if (playerOut === state.liberoId) {
+    if (!state.liberoReplacing) fail(event, "the libero isn't on court")
+    if (playerIn !== state.liberoReplacing) {
+      fail(event, 'only the player the libero replaced can come back in for the libero')
+    }
+    returnFromLibero(state)
+  } else {
+    fail(event, 'a libero swap has to move the libero in or out')
+  }
+}
+
+function returnFromLibero(state: MatchState) {
+  if (!state.liberoId || !state.liberoReplacing) return
+  state.lineup[state.lineup.indexOf(state.liberoId)] = state.liberoReplacing
+  state.liberoReplacing = null
 }
 
 function requirePlaying(state: MatchState, event: MatchEvent) {

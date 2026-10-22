@@ -49,6 +49,14 @@ export class MatchScript {
     return this
   }
 
+  sub(playerIn: string, playerOut: string): this {
+    return this.record({ type: 'substitution', playerId: playerIn, detail: { playerOutId: playerOut, kind: 'regular' } })
+  }
+
+  liberoSwap(playerIn: string, playerOut: string): this {
+    return this.record({ type: 'substitution', playerId: playerIn, detail: { playerOutId: playerOut, kind: 'libero' } })
+  }
+
   /** From 0-0, plays the set to this final score. The loser's points go first so the set can't end early. */
   playSetTo(us: number, them: number): this {
     return us > them ? this.point('them', them).point('us', us) : this.point('us', us).point('them', them)

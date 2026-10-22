@@ -35,6 +35,13 @@ Serving and rotation (code: `app/src/domain/replay.ts`):
 - When we side out, we rotate clockwise: position 2 moves to 1 and serves, and position 1 moves to 6.
 - Rotations are named the way coaches name them, by where the setter is: rotation 1 means the setter is in position 1. Each rotation moves the setter back one spot, so a set goes rotation 1, 6, 5, 4, 3, 2, 1. We don't track the opponent's rotation.
 
+Substitutions and the libero:
+
+- A substitute takes the same spot in the rotation as the player they replace.
+- The libero starts each set on the bench and can only come in for a back-row player. Only the player they replaced can come back in for them.
+- The libero can't play in the front row. When they would rotate into position 4, the app brings the player they replaced back in automatically.
+- Phase 1 doesn't enforce substitution limits or libero serving rules.
+
 ## Repository layout
 
 ```
