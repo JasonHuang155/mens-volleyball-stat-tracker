@@ -13,6 +13,19 @@ Every tap courtside is saved as an **event**: who did what, in which set and ral
 
 This makes undo safe, means stats can't drift out of sync with what happened, and keeps later phases simple: syncing to a server or loading a warehouse just means copying events that haven't been copied yet.
 
+## Volleyball rules the app follows
+
+Who gets the point (code: `app/src/domain/rules.ts`):
+
+| Point for us | Point for them | Rally continues |
+|---|---|---|
+| serve ace | serve error | serve in |
+| kill | attack error (including getting blocked) | attack in play |
+| block solo, block assist | block error | dig, assist |
+| their error | pass 0 (we got aced) | pass 1–3 |
+| | ball handling error | |
+| | their point | |
+
 ## Repository layout
 
 ```
