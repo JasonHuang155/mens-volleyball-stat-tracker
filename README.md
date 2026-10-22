@@ -87,7 +87,18 @@ Each tap is checked and saved inside one database transaction. Transactions on t
 | `/` | Home: create your team, start a new match, open the roster, and see every match with where it stands ("Set 2 · 12–10", "Won 3–1") |
 | `/teams/:teamId` | Roster: add players (number, name, position), tap a player to edit or delete them |
 | `/teams/:teamId/new-match` | New match: opponent and best of 3 or 5 |
-| `/matches/:matchId` | The match: scoreboard, then the lineup form before each set, or the set being played |
+| `/matches/:matchId` | The match: scoreboard, then the lineup form before each set, or the courtside tap screen during a set |
+
+Passes (rated 0–3) are serve-receive stats, the same as NCAA "receptions", so the app only accepts them on the other team's serve.
+
+The courtside tap screen (`LiveEntry.tsx`):
+- Every stat is two taps: the player (laid out like the court), then what they did. A "Last:" line confirms what was saved.
+- Only buttons that make sense right now are shown: serve buttons only for our server, pass ratings only on their serve, block buttons only for front-row players.
+- Serve type (jump spin, jump float, standing float) defaults to the type that player served last.
+- Attacks are marked front or back row from where the player is standing.
+- After a kill it asks "Assist by?" (setters first). After a block assist it asks "Who else blocked?", then "Anyone else?" for a triple block. Ignoring the question is fine: the next tap closes it, and it still appears after the kill that ends a set.
+- "Their point" and "Their error" for team-only points, plus Undo and Subs (regular subs, and one-tap libero in/out).
+- During a set the screen is compacted so a whole panel of buttons fits on a phone without scrolling: the heading is hidden (the scoreboard shows both names) and the group labels sit beside the buttons.
 
 The lineup form, shown before every set:
 - Six spots laid out like the court (net at the top: 4, 3, 2 in front, 5, 6, 1 behind). A player can only be picked for one spot.

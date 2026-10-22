@@ -1,16 +1,22 @@
 import type { MatchState } from '../domain/types.ts'
 
-type Props = { state: MatchState; teamName: string; opponentName: string }
+type Props = {
+  state: MatchState
+  teamName: string
+  opponentName: string
+  /** Smaller, for the tap screen, where every bit of height counts. */
+  compact?: boolean
+}
 
 /** Sets won, the current set's score, and a dot by whoever is serving. */
-function Scoreboard({ state, teamName, opponentName }: Props) {
+function Scoreboard({ state, teamName, opponentName, compact = false }: Props) {
   const current = state.sets[state.sets.length - 1] ?? { us: 0, them: 0 }
   const playing = state.status === 'playing'
   const label =
     state.setNumber === 0 ? 'Not started' : playing ? `Set ${state.setNumber}` : `Set ${state.setNumber} final`
 
   return (
-    <section className="scoreboard" aria-label="Score">
+    <section className={compact ? 'scoreboard scoreboard-compact' : 'scoreboard'} aria-label="Score">
       <p className="scoreboard-label">{label}</p>
       <ScoreRow name={teamName} sets={state.setsWon.us} points={current.us} serving={playing && state.servingTeam === 'us'} />
       <ScoreRow

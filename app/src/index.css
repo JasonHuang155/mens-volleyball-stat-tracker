@@ -9,6 +9,7 @@
   --accent: #1d5fd1;
   --accent-text: #ffffff;
   --danger: #c02626;
+  --good: #16794a;
   --tap: 56px; /* minimum height of anything you tap; the usual minimum is 44px */
   --radius: 12px;
 
@@ -28,6 +29,7 @@
     --accent: #5b8ef0;
     --accent-text: #0b0d10;
     --danger: #f07171;
+    --good: #4fcf8a;
   }
 }
 
@@ -406,15 +408,34 @@ h2 {
   color: var(--muted);
 }
 
-.court-player {
-  min-height: 72px;
+.court-button {
+  width: 100%;
+  min-height: 76px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
+  gap: 1px;
+  border: 2px solid var(--border);
   border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
   padding: 4px;
+  cursor: pointer;
+}
+
+.court-button-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
 }
 
 .court-name {
@@ -423,4 +444,185 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---- Courtside tap screen ---- */
+
+/* Tighter spacing so a whole rally's worth of buttons fits on a phone without scrolling. */
+.screen-live {
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.screen-live .back-link {
+  min-height: 36px;
+}
+
+.scoreboard-compact {
+  padding: 6px 12px;
+}
+
+.scoreboard-compact .scoreboard-label {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.scoreboard-compact .score-points {
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+
+.screen-live .court-button {
+  min-height: 62px;
+}
+
+.screen-live .court-name {
+  font-size: 0.8rem;
+}
+
+.screen-live .jersey {
+  font-size: 1.1rem;
+  line-height: 1.1;
+}
+
+.button-small {
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 0.95rem;
+}
+
+.live {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-line,
+.last-tap {
+  margin: 0;
+}
+
+.last-tap {
+  font-size: 0.95rem;
+}
+
+.action-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-panel > p {
+  margin: 0;
+}
+
+.action-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 1.1rem;
+}
+
+/* The group's name sits in a narrow column to the left of its buttons. */
+.action-group {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.action-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.action-group-label {
+  font-size: 0.75rem;
+  line-height: 1.1;
+  color: var(--muted);
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.action-buttons-1 {
+  grid-template-columns: 1fr;
+}
+
+.action-buttons-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.action-buttons-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.action-button {
+  padding: 0 6px;
+  line-height: 1.15;
+}
+
+.action-good {
+  border-color: var(--good);
+  color: var(--good);
+}
+
+.action-bad {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.chip-row {
+  display: flex;
+  gap: 6px;
+}
+
+.chip {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ---- "Assist by?" question ---- */
+
+.follow-up {
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.follow-up-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.follow-up-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.follow-up-button {
+  min-width: 64px;
+  font-size: 1.2rem;
 }

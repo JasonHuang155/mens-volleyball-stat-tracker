@@ -48,6 +48,8 @@ export function replay(match: Pick<Match, 'bestOf'>, events: MatchEvent[]): Matc
           if (state.servingTeam !== 'us') fail(event, "we can't serve when they're serving")
           if (event.playerId !== state.lineup[0]) fail(event, 'only the player in position 1 can serve')
         }
+        // A pass rating is a serve-receive stat (NCAA "reception"), so it needs their serve.
+        if (event.type === 'pass' && state.servingTeam !== 'them') fail(event, 'passes are rated on their serve')
         const winner = pointWinner(event)
         if (winner) {
           pointsByAction.set(event.actionId, winner)

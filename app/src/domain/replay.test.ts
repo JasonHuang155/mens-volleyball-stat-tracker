@@ -107,11 +107,19 @@ describe('scoring and serving', () => {
       .startSet()
       .record({ type: 'serve', playerId: 'p1', result: 'in', detail: { serveType: 'jump_float' } })
       .record({ type: 'dig', playerId: 'p5' })
-      .record({ type: 'pass', playerId: 'p6', result: 2 })
       .record({ type: 'attack', playerId: 'p4', result: 'in_play', detail: { row: 'front' } })
       .state()
     expect(state.sets[0]).toMatchObject({ us: 0, them: 0 })
     expect(state.rallyNumber).toBe(1)
+
+    const receiving = new MatchScript().startSet({ firstServe: 'them' }).record({ type: 'pass', playerId: 'p6', result: 2 })
+    expect(receiving.state().sets[0]).toMatchObject({ us: 0, them: 0 })
+  })
+
+  it('only rates passes on their serve', () => {
+    expect(() => new MatchScript().startSet().record({ type: 'pass', playerId: 'p6', result: 3 })).toThrow(
+      'passes are rated on their serve',
+    )
   })
 
   it('scores a kill for us and a serve error for them', () => {

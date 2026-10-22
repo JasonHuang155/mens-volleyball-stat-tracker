@@ -1,16 +1,18 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import Court from '../components/Court.tsx'
 import Scoreboard from '../components/Scoreboard.tsx'
 import UndoButton from '../components/UndoButton.tsx'
 import { db } from '../db/database.ts'
 import { getEvents, getMatch } from '../db/matches.ts'
 import { listPlayers } from '../db/roster.ts'
 import { replay } from '../domain/replay.ts'
-import type { Match, MatchState, Player } from '../domain/types.ts'
+import { lastActiveEvent } from '../domain/undo.ts'
+import FollowUpStrip, { type FollowUp } from './FollowUpStrip.tsx'
+import LiveEntry from './LiveEntry.tsx'
 import SetLineup from './SetLineup.tsx'
 
-/** One match. Shows the lineup form between sets and the set being played otherwise. */
+/** One match. Shows the lineup form between sets and the tap screen during a set. */
 function MatchScreen() {
   const { matchId = '' } = useParams()
   const data = useLiveQuery(async () => {
@@ -23,6 +25,8 @@ function MatchScreen() {
     ])
     return { match, teamName: team?.name ?? 'Us', players, events }
   }, [matchId])
+  // Lives here, not in LiveEntry, so "Assist by?" still shows after the kill that ends a set.
+  const [followUp, setFollowUp] = useState<FollowUp | null>(null)
 
   if (data === undefined) return null
   if (data === null) {
@@ -39,14 +43,22 @@ function MatchScreen() {
   const { match, teamName, players, events } = data
   // The whole match state is rebuilt from the saved taps every time something changes.
   const state = replay(match, events)
+  // Only ask about the play that was just made: any newer tap or an undo hides the question.
+  const openFollowUp = followUp && lastActiveEvent(events)?.actionId === followUp.actionId ? followUp : null
+  // During a set, everything should fit on a phone screen without scrolling,
+  // so the heading is hidden (the scoreboard shows both names) and things are tighter.
+  const playing = state.status === 'playing'
 
   return (
-    <main className="screen">
+    <main className={playing ? 'screen screen-live' : 'screen'}>
       <Link className="back-link" to="/">
         ‹ Home
       </Link>
-      <h1>vs {match.opponentName}</h1>
-      <Scoreboard state={state} teamName={teamName} opponentName={match.opponentName} />
+      <h1 className={playing ? 'sr-only' : undefined}>vs {match.opponentName}</h1>
+      <Scoreboard state={state} teamName={teamName} opponentName={match.opponentName} compact={playing} />
+      {openFollowUp && (
+        <FollowUpStrip followUp={openFollowUp} match={match} players={players} state={state} onChange={setFollowUp} />
+      )}
 
       {state.status === 'waiting_for_lineup' && (
         <>
@@ -62,7 +74,16 @@ function MatchScreen() {
           {state.setNumber > 0 && <UndoButton match={match} />}
         </>
       )}
-      {state.status === 'playing' && <SetInProgress match={match} players={players} state={state} />}
+      {state.status === 'playing' && (
+        <LiveEntry
+          key={state.setNumber}
+          match={match}
+          players={players}
+          events={events}
+          state={state}
+          onFollowUp={setFollowUp}
+        />
+      )}
       {state.status === 'finished' && (
         <section className="card">
           <h2>{state.winner === 'us' ? `${teamName} won` : `${match.opponentName} won`}</h2>
@@ -73,36 +94,6 @@ function MatchScreen() {
         </section>
       )}
     </main>
-  )
-}
-
-type InProgressProps = { match: Match; players: Player[]; state: MatchState }
-
-/** Who's on court and who's serving. The tap-to-record buttons build on this next. */
-function SetInProgress({ match, players, state }: InProgressProps) {
-  const byId = new Map(players.map((p) => [p.id, p]))
-  const server = state.serverId ? byId.get(state.serverId) : undefined
-
-  return (
-    <section className="card" aria-label="On court">
-      <p>
-        {server ? `#${server.number} ${server.name} serving` : `${match.opponentName} serving`} · Rotation{' '}
-        {state.rotation}
-      </p>
-      <Court
-        renderSlot={(position) => {
-          const player = byId.get(state.lineup[position - 1])
-          return (
-            <div className="court-player">
-              <span className="court-position">{position}</span>
-              <span className="jersey">#{player?.number}</span>
-              <span className="court-name">{player?.name}</span>
-            </div>
-          )
-        }}
-      />
-      <UndoButton match={match} />
-    </section>
   )
 }
 
