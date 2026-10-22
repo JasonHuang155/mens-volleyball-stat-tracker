@@ -1,16 +1,7 @@
 import type { MatchEvent, PassRating, Player } from './types.ts'
 
-// ============================================================================
-// YOUR PART (step 7): write the body of each function below.
-//
-// Each one currently calls notImplemented(), which makes its tests fail.
-// Replace that line with your code, then run the tests from the app folder:
-//
-//   npm.cmd run test:watch -- boxScore
-//
-// The tests are in boxScore.test.ts. They re-run every time you save.
-// Suggested order: top to bottom. The first four are one-liners.
-// ============================================================================
+// Per-player stats, counted from the events. Nothing here is ever saved:
+// the box score is rebuilt from the event list whenever it's needed.
 
 /** One player's row in the box score. The comments are the NCAA column names. */
 export interface PlayerLine {
@@ -41,7 +32,8 @@ export interface PlayerLine {
  * It can be negative. With 0 attempts there is no percentage, so return null.
  */
 export function hittingPercentage(kills: number, errors: number, attempts: number): number | null {
-  return notImplemented('hittingPercentage', kills, errors, attempts)
+  if (attempts === 0) return null
+  return (kills - errors) / attempts
 }
 
 /**
@@ -49,12 +41,15 @@ export function hittingPercentage(kills: number, errors: number, attempts: numbe
  * With no passes there is no average, so return null.
  */
 export function passAverage(ratings: PassRating[]): number | null {
-  return notImplemented('passAverage', ratings)
+  if (ratings.length === 0) return null
+  let total = 0
+  for (const rating of ratings) total += rating
+  return total / ratings.length
 }
 
 /** Total blocks = solo blocks + half of block assists. Example: 1 solo, 2 assists → 2. */
 export function totalBlocks(solos: number, assists: number): number {
-  return notImplemented('totalBlocks', solos, assists)
+  return solos + assists / 2
 }
 
 /**
@@ -62,36 +57,101 @@ export function totalBlocks(solos: number, assists: number): number {
  * Example: 10 kills, 2 aces, 1 solo, 3 block assists → 14.5
  */
 export function points(kills: number, aces: number, blockSolos: number, blockAssists: number): number {
-  return notImplemented('points', kills, aces, blockSolos, blockAssists)
+  return kills + aces + blockSolos + blockAssists / 2
 }
 
 /**
  * How many sets this player played in. A player played in a set if they
- * were in that set's starting lineup (a 'set_start' event's detail.lineup)
- * or came on court during it (they're the playerId of a 'substitution'
- * event: a regular sub or a libero swap). Every event has a setNumber.
- * Count each set once, even if the player came in twice.
+ * were in that set's starting lineup or came on court during it (a regular
+ * sub or a libero swap). Each set counts once, even if they came in twice.
  */
 export function setsPlayed(events: MatchEvent[], playerId: string): number {
-  return notImplemented('setsPlayed', events, playerId)
+  const sets = new Set<number>() // a Set ignores duplicates, so each set number is kept once
+  for (const event of events) {
+    const started = event.type === 'set_start' && event.detail.lineup.includes(playerId)
+    const cameIn = event.type === 'substitution' && event.playerId === playerId
+    if (started || cameIn) sets.add(event.setNumber)
+  }
+  return sets.size
 }
 
 /**
  * The full box score: one PlayerLine per player, in the same order as
  * `players`. Players who did nothing get a line of zeros (and null for the
- * two averages). Ignore events without a player (their_point, their_error).
+ * two averages). Events without a player (their_point, their_error) count
+ * for no one.
  *
  * `events` only contains events that still count (undone plays are already
- * removed), so you don't need to think about Undo.
- *
- * Tip: check event.type before reading event.playerId or event.result.
- * Once TypeScript knows the type, it knows which fields that event has.
+ * removed by activeEvents).
  */
 export function buildBoxScore(events: MatchEvent[], players: Player[]): PlayerLine[] {
-  return notImplemented('buildBoxScore', events, players)
+  return players.map((player) => playerLine(events, player.id))
 }
 
-/** Placeholder that makes a test fail. Delete it once every function above is written. */
-function notImplemented(name: string, ..._inputs: unknown[]): never {
-  throw new Error(`${name} isn't written yet`)
+function playerLine(events: MatchEvent[], playerId: string): PlayerLine {
+  const line: PlayerLine = {
+    playerId,
+    setsPlayed: setsPlayed(events, playerId),
+    kills: 0,
+    attackErrors: 0,
+    totalAttacks: 0,
+    hittingPercentage: null,
+    assists: 0,
+    serviceAces: 0,
+    serviceErrors: 0,
+    receptionAttempts: 0,
+    receptionErrors: 0,
+    passAverage: null,
+    digs: 0,
+    blockSolos: 0,
+    blockAssists: 0,
+    totalBlocks: 0,
+    blockErrors: 0,
+    ballHandlingErrors: 0,
+    points: 0,
+  }
+  const passRatings: PassRating[] = []
+
+  // Step 1: count this player's taps.
+  for (const event of events) {
+    if (!('playerId' in event) || event.playerId !== playerId) continue
+
+    switch (event.type) {
+      case 'attack':
+        line.totalAttacks += 1
+        if (event.result === 'kill') line.kills += 1
+        if (event.result === 'error') line.attackErrors += 1
+        break
+      case 'serve':
+        if (event.result === 'ace') line.serviceAces += 1
+        if (event.result === 'error') line.serviceErrors += 1
+        break
+      case 'pass':
+        passRatings.push(event.result)
+        break
+      case 'block':
+        if (event.result === 'solo') line.blockSolos += 1
+        if (event.result === 'assist') line.blockAssists += 1
+        if (event.result === 'error') line.blockErrors += 1
+        break
+      case 'dig':
+        line.digs += 1
+        break
+      case 'assist':
+        line.assists += 1
+        break
+      case 'ball_handling_error':
+        line.ballHandlingErrors += 1
+        break
+    }
+  }
+
+  // Step 2: work out the stats that come from those counts.
+  line.receptionAttempts = passRatings.length
+  line.receptionErrors = passRatings.filter((rating) => rating === 0).length
+  line.passAverage = passAverage(passRatings)
+  line.hittingPercentage = hittingPercentage(line.kills, line.attackErrors, line.totalAttacks)
+  line.totalBlocks = totalBlocks(line.blockSolos, line.blockAssists)
+  line.points = points(line.kills, line.serviceAces, line.blockSolos, line.blockAssists)
+  return line
 }
