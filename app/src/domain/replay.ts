@@ -8,7 +8,7 @@ import type {
   Row,
   SetStartBody,
   SubstitutionBody,
-  Team,
+  Side,
 } from './types.ts'
 
 /**
@@ -18,7 +18,7 @@ import type {
  */
 export function replay(match: Pick<Match, 'bestOf'>, events: MatchEvent[]): MatchState {
   const state = initialState()
-  const pointsByAction = new Map<string, Team>()
+  const pointsByAction = new Map<string, Side>()
 
   for (const event of activeEvents(events)) {
     // A follow-up tap (the assist on a kill, the second blocker on a block assist)
@@ -115,7 +115,7 @@ function startSet(state: MatchState, event: MatchEvent & SetStartBody) {
   state.rotation = startingRotation(event.detail)
 }
 
-function awardPoint(state: MatchState, winner: Team, bestOf: Match['bestOf']) {
+function awardPoint(state: MatchState, winner: Side, bestOf: Match['bestOf']) {
   const set = state.sets[state.sets.length - 1]
   set[winner] += 1
   state.rallyNumber += 1

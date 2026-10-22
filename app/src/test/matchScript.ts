@@ -1,6 +1,6 @@
 import { recordAction, recordFollowUp, recordUndo } from '../domain/record.ts'
 import { replay } from '../domain/replay.ts'
-import type { BestOf, EventBody, FollowUpBody, MatchEvent, SetStartBody, Team } from '../domain/types.ts'
+import type { BestOf, EventBody, FollowUpBody, MatchEvent, SetStartBody, Side } from '../domain/types.ts'
 
 /** p1 starts in position 1 (serving), p2 in position 2, ... p6 in position 6. */
 export const LINEUP = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6']
@@ -57,9 +57,9 @@ export class MatchScript {
   }
 
   /** Gives a team points without crediting a player: "their error" for us, "their point" for them. */
-  point(team: Team, count = 1): this {
+  point(side: Side, count = 1): this {
     for (let i = 0; i < count; i++) {
-      this.record(team === 'us' ? { type: 'their_error' } : { type: 'their_point' })
+      this.record(side === 'us' ? { type: 'their_error' } : { type: 'their_point' })
     }
     return this
   }

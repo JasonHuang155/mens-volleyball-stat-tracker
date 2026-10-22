@@ -1,6 +1,7 @@
 // Shared types for the volleyball logic. Nothing in domain/ knows about React or the database.
 
-export type Team = 'us' | 'them'
+/** Which side of the net: our team or the opponent. */
+export type Side = 'us' | 'them'
 export type Position = 'OH' | 'OPP' | 'MB' | 'S' | 'L'
 export type BestOf = 3 | 5
 /** Our rotation, named by where the setter is: rotation 1 = setter in court position 1. */
@@ -9,6 +10,11 @@ export type ServeType = 'jump_spin' | 'jump_float' | 'standing_float'
 /** 3 = perfect pass, 0 = we got aced. */
 export type PassRating = 0 | 1 | 2 | 3
 export type Row = 'front' | 'back'
+
+export interface Team {
+  id: string
+  name: string
+}
 
 export interface Player {
   id: string
@@ -69,7 +75,7 @@ export type SetStartBody = {
     lineup: string[]
     setterId: string
     liberoId: string | null
-    firstServe: Team
+    firstServe: Side
   }
 }
 
@@ -102,7 +108,7 @@ export interface EventBase {
   setNumber: number
   /** Restarts at 1 each set. */
   rallyNumber: number
-  servingTeam: Team
+  servingTeam: Side
   rotation: Rotation
 }
 
@@ -113,7 +119,7 @@ export type MatchEvent = EventBase & EventBody
 export interface SetScore {
   us: number
   them: number
-  winner: Team | null
+  winner: Side | null
 }
 
 export type MatchStatus = 'waiting_for_lineup' | 'playing' | 'finished'
@@ -125,9 +131,9 @@ export interface MatchState {
   setNumber: number
   rallyNumber: number
   sets: SetScore[]
-  setsWon: Record<Team, number>
-  winner: Team | null
-  servingTeam: Team
+  setsWon: Record<Side, number>
+  winner: Side | null
+  servingTeam: Side
   /** Our player serving right now, or null when they're serving. */
   serverId: string | null
   /** Player ids on court in positions 1-6 (index 0 = position 1). */

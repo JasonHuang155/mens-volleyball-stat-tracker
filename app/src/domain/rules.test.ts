@@ -7,11 +7,11 @@ import {
   setsNeededToWin,
   setWinner,
 } from './rules.ts'
-import type { EventBody, Team } from './types.ts'
+import type { EventBody, Side } from './types.ts'
 
 describe('pointWinner', () => {
   const p = 'p1'
-  const cases: [string, EventBody, Team | null][] = [
+  const cases: [string, EventBody, Side | null][] = [
     ['serve ace', { type: 'serve', playerId: p, result: 'ace', detail: { serveType: 'jump_spin' } }, 'us'],
     ['serve error', { type: 'serve', playerId: p, result: 'error', detail: { serveType: 'jump_float' } }, 'them'],
     ['serve in', { type: 'serve', playerId: p, result: 'in', detail: { serveType: 'standing_float' } }, null],
@@ -55,7 +55,7 @@ describe('deciding set', () => {
 })
 
 describe('setWinner', () => {
-  const cases: [number, number, number, Team | null][] = [
+  const cases: [number, number, number, Side | null][] = [
     // [us, them, setNumber, expected] in a best of 5
     [25, 23, 1, 'us'],
     [23, 25, 1, 'them'],

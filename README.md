@@ -61,6 +61,25 @@ This folder is the volleyball logic, with no screens or database, so it's easy t
 
 | `boxScore.ts` | Per-player stats counted from the events, matching the NCAA box score columns. Written test-first: the tests in `boxScore.test.ts` came before the code |
 
+## Storage (`app/src/db/`)
+
+Everything is saved on the phone in IndexedDB, the database built into every browser, using the Dexie library. It works offline and survives refreshes.
+
+| Table | Holds |
+|---|---|
+| `teams` | team name |
+| `players` | roster: name, jersey number, position |
+| `matches` | opponent, best of 3 or 5, when it was created |
+| `events` | every tap: the list the volleyball logic replays |
+
+| File | What it does |
+|---|---|
+| `database.ts` | Table definitions |
+| `roster.ts` | Teams and players. Jersey numbers must be unique per team, and a player who has played in a match can't be deleted |
+| `matches.ts` | Matches, plus `recordTap()`, `recordFollowUpTap()`, `undoLastTap()`: check a tap with the volleyball logic, then save it |
+
+Each tap is checked and saved inside one database transaction. Transactions on the same table run one at a time, so two fast taps can't get the same `seq` number. Tests use `fake-indexeddb`, a pretend IndexedDB that runs in Node (`app/src/test/setup.ts`).
+
 `app/src/test/matchScript.ts` is a test helper that plays out a match tap by tap, e.g. `new MatchScript().startSet().point('us', 3)`.
 
 ## Repository layout
@@ -107,6 +126,8 @@ It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve ty
 | Events record the serving team and rotation at the time of the tap | The app could recompute them, but SQL in Phase 3 would have to replay the whole match. Stamping them makes "sideout % by rotation" a simple GROUP BY, and gives the Phase 3 data tests something to check |
 | `replay()` throws on impossible taps, and recording checks every tap with it | One place defines the rules. A tap that breaks them is never saved |
 | Rotations named by the setter's position | The convention coaches use, so rotation 3 means the same thing in every set |
+| Dexie for IndexedDB | IndexedDB's own interface is clunky; Dexie makes it a few readable lines and can refresh the screen when data changes |
+| Players can't be deleted once they've played | Their events would point at nobody, breaking box scores and Phase 3 season stats |
 | `uuid` library for ids | The browser's built-in `crypto.randomUUID()` only works on https or localhost, and testing on a phone over Wi-Fi is neither |
 | React + TypeScript + Vite | Industry-standard frontend stack; TypeScript catches mistakes like a misspelled stat name before the app runs |
 | Vitest for tests | Built for Vite, so tests use the same setup as the app |

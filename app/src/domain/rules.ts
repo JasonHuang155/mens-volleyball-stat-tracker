@@ -1,16 +1,16 @@
-import type { AttackBody, BestOf, BlockBody, EventBody, ServeBody, Team } from './types.ts'
+import type { AttackBody, BestOf, BlockBody, EventBody, ServeBody, Side } from './types.ts'
 
 // The "who gets the point" table. null means the rally keeps going.
-const SERVE_POINT: Record<ServeBody['result'], Team | null> = { ace: 'us', error: 'them', in: null }
-const ATTACK_POINT: Record<AttackBody['result'], Team | null> = {
+const SERVE_POINT: Record<ServeBody['result'], Side | null> = { ace: 'us', error: 'them', in: null }
+const ATTACK_POINT: Record<AttackBody['result'], Side | null> = {
   kill: 'us',
   error: 'them', // includes getting blocked
   in_play: null,
 }
-const BLOCK_POINT: Record<BlockBody['result'], Team> = { solo: 'us', assist: 'us', error: 'them' }
+const BLOCK_POINT: Record<BlockBody['result'], Side> = { solo: 'us', assist: 'us', error: 'them' }
 
 /** Which team this tap gives the point to, or null if the rally keeps going. */
-export function pointWinner(body: EventBody): Team | null {
+export function pointWinner(body: EventBody): Side | null {
   switch (body.type) {
     case 'serve':
       return SERVE_POINT[body.result]
@@ -41,7 +41,7 @@ export function pointsToWinSet(setNumber: number, bestOf: BestOf): number {
 }
 
 /** Who has won the set at this score, or null if it isn't over. You must win by 2. */
-export function setWinner(us: number, them: number, setNumber: number, bestOf: BestOf): Team | null {
+export function setWinner(us: number, them: number, setNumber: number, bestOf: BestOf): Side | null {
   const target = pointsToWinSet(setNumber, bestOf)
   if (us >= target && us - them >= 2) return 'us'
   if (them >= target && them - us >= 2) return 'them'
@@ -54,7 +54,7 @@ export function setsNeededToWin(bestOf: BestOf): number {
 }
 
 /** Who has won the match, or null if it isn't over. */
-export function matchWinner(setsWon: Record<Team, number>, bestOf: BestOf): Team | null {
+export function matchWinner(setsWon: Record<Side, number>, bestOf: BestOf): Side | null {
   const needed = setsNeededToWin(bestOf)
   if (setsWon.us >= needed) return 'us'
   if (setsWon.them >= needed) return 'them'
