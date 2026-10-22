@@ -26,6 +26,8 @@ Who gets the point (code: `app/src/domain/rules.ts`):
 | | ball handling error | |
 | | their point | |
 
+Sets go to 25, win by 2. The deciding set (set 3 of a best of 3, set 5 of a best of 5) goes to 15, win by 2. There's no cap, so 33–31 is a legal score.
+
 ## Repository layout
 
 ```

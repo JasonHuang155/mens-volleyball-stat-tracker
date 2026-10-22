@@ -1,4 +1,4 @@
-import type { AttackBody, BlockBody, EventBody, ServeBody, Team } from './types.ts'
+import type { AttackBody, BestOf, BlockBody, EventBody, ServeBody, Team } from './types.ts'
 
 // The "who gets the point" table. null means the rally keeps going.
 const SERVE_POINT: Record<ServeBody['result'], Team | null> = { ace: 'us', error: 'them', in: null }
@@ -28,4 +28,35 @@ export function pointWinner(body: EventBody): Team | null {
     default:
       return null // dig, assist, set_start, substitution, undo
   }
+}
+
+/** The last possible set (set 3 of a best of 3, set 5 of a best of 5) is the deciding set. */
+export function isDecidingSet(setNumber: number, bestOf: BestOf): boolean {
+  return setNumber === bestOf
+}
+
+/** Sets go to 25, except the deciding set, which goes to 15. */
+export function pointsToWinSet(setNumber: number, bestOf: BestOf): number {
+  return isDecidingSet(setNumber, bestOf) ? 15 : 25
+}
+
+/** Who has won the set at this score, or null if it isn't over. You must win by 2. */
+export function setWinner(us: number, them: number, setNumber: number, bestOf: BestOf): Team | null {
+  const target = pointsToWinSet(setNumber, bestOf)
+  if (us >= target && us - them >= 2) return 'us'
+  if (them >= target && them - us >= 2) return 'them'
+  return null
+}
+
+/** 2 sets to win a best of 3, 3 sets to win a best of 5. */
+export function setsNeededToWin(bestOf: BestOf): number {
+  return Math.ceil(bestOf / 2)
+}
+
+/** Who has won the match, or null if it isn't over. */
+export function matchWinner(setsWon: Record<Team, number>, bestOf: BestOf): Team | null {
+  const needed = setsNeededToWin(bestOf)
+  if (setsWon.us >= needed) return 'us'
+  if (setsWon.them >= needed) return 'them'
+  return null
 }
