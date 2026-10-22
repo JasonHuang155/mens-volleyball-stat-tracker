@@ -1,0 +1,13 @@
+# Each part of the monorepo has its own .gitignore too (e.g. app/.gitignore).
+
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea
