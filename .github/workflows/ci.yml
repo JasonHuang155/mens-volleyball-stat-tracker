@@ -1,0 +1,26 @@
+# Runs the checks on GitHub's computers every time code is pushed or a pull request is opened.
+# A red X on GitHub means one of these steps failed.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  app:
+    name: App (lint, type-check, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci # installs exactly the versions in package-lock.json
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build # also type-checks

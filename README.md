@@ -99,10 +99,15 @@ Things to know:
 ## Repository layout
 
 ```
-app/        Phase 1: React + TypeScript stat entry app (Vite)
-api/        Phase 2: FastAPI backend (not started)
-pipeline/   Phase 3: DuckDB + dbt + Dagster (not started)
+app/                 Phase 1: React + TypeScript stat entry app (Vite)
+api/                 Phase 2: FastAPI backend (not started)
+pipeline/            Phase 3: DuckDB + dbt + Dagster (not started)
+.github/workflows/   Automatic checks and publishing on GitHub
 ```
+
+GitHub Actions run two workflows:
+- `ci.yml` runs lint, the type check, the tests, and a build on every push and pull request.
+- `pages.yml` publishes the app as a website on GitHub Pages whenever `main` changes. The site is served from `/<repository-name>/`, so the build gets that prefix (`BASE_PATH`), and a copy of the app is saved as `404.html` so opening a deeper address like `/matches/…` directly still loads the app.
 
 ## Code tour
 

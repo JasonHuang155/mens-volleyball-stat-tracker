@@ -1,0 +1,55 @@
+# Publishes the app as a website on GitHub Pages every time main changes.
+# The site lives at https://<your-username>.github.io/<repository-name>/
+name: Publish app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # also lets you run it by hand from the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one publish at a time; a newer push replaces one still waiting.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # The site is served from /<repository-name>/, not from /, so every link needs that prefix.
+      - run: npm run build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+      # GitHub Pages only knows about files. Opening /matches/123 directly would be a "not found",
+      # so the not-found page is the app itself, which then shows the right screen.
+      - run: cp dist/index.html dist/404.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: app/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

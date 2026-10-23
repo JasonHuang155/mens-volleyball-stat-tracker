@@ -8,10 +8,13 @@ import ErrorBoundary from './components/ErrorBoundary.tsx'
 const root = document.getElementById('root')!
 root.dataset.started = 'true' // tells the error message in index.html that the app is running
 
+// On GitHub Pages the app lives under /<repository-name>/, so screen addresses start there.
+const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/'
+
 createRoot(root).render(
   <StrictMode>
     <ErrorBoundary>
-      <BrowserRouter>
+      <BrowserRouter basename={basename}>
         <App />
       </BrowserRouter>
     </ErrorBoundary>
