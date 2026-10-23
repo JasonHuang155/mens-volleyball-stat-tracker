@@ -147,10 +147,22 @@ Other commands, run from `app/`:
 
 | Command | What it does |
 |---|---|
+| `npm run dev:phone` | start the app so a phone on the same Wi-Fi can open it (see below) |
 | `npm test` | run the tests once |
 | `npm run test:watch` | re-run tests every time you save a file |
 | `npm run build` | type-check and build the production files into `app/dist/` |
 | `npm run lint` | check the code for common mistakes |
+
+### Try it on your phone
+
+1. Put the phone on the same Wi-Fi as the computer.
+2. From `app/`, run `npm run dev:phone`. It prints a `Network:` address like `http://10.0.0.29:5173`.
+3. The first time, Windows Firewall asks whether Node.js may use the network. Allow it. If Windows has your home Wi-Fi marked as a Public network, either tick "Public networks" in that prompt, or change the network to Private (Settings → Network & internet → Wi-Fi → your network → Network profile type), which is the usual setting for a home network.
+4. Open the `Network:` address in the phone's browser.
+
+Things to know:
+- Campus and public Wi-Fi often block devices from reaching each other. If the phone can't load the page, turn on the phone's hotspot and connect the computer to it.
+- Data saved on the phone stays on the phone, separate from the computer's browser. It's also tied to that exact address. If the computer's address changes (a different network), the phone opens a fresh, empty app; the old data is still there under the old address. Phase 2 puts the app at one permanent web address and syncs data to a server.
 
 ## Stats tracked
 
