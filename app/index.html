@@ -7,7 +7,37 @@
     <title>Volleyball Stat Tracker</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Shown until the app starts. React replaces it. -->
+    <div id="root"><p style="padding: 16px; font-family: system-ui, sans-serif">Loading…</p></div>
+
+    <!-- If the app can't start, say why on the page instead of leaving it blank (phones have no console). -->
+    <script>
+      ;(function () {
+        function show(message) {
+          var root = document.getElementById('root')
+          if (!root || root.dataset.started) return
+          root.innerHTML =
+            '<div style="padding: 16px; font-family: system-ui, sans-serif">' +
+            '<h1 style="font-size: 1.4rem">The app couldn’t start</h1><p></p></div>'
+          root.querySelector('p').textContent = message
+        }
+        window.addEventListener(
+          'error',
+          function (event) {
+            var target = event.target
+            if (target && target.tagName === 'SCRIPT') show('A script failed to load: ' + target.src)
+            else show(event.message || 'Unknown error')
+          },
+          true,
+        )
+        window.addEventListener('unhandledrejection', function (event) {
+          show(String((event.reason && event.reason.message) || event.reason))
+        })
+      })()
+    </script>
+    <script nomodule>
+      document.getElementById('root').textContent = 'This browser is too old for this app. Try updating it, or use Chrome or Safari.'
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
