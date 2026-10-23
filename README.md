@@ -2,7 +2,7 @@
 
 A courtside stat tracker for men's volleyball that records both teams, the way an NCAA stat crew does. It's built to show both software engineering and data engineering:
 
-- **Phase 1 (in progress):** a phone app for entering stats during a match
+- **Phase 1 (done):** a phone app for entering stats during a match
 - **Phase 2:** a backend with offline sync, accounts, and a live box score link
 - **Phase 3:** a data pipeline and warehouse with volleyball-aware data quality tests
 - **Phase 4:** NCAA men's volleyball play-by-play as a second data source
@@ -176,6 +176,14 @@ Phone-friendly details: tap targets are at least 52px tall on the tap screen and
 For both teams, the box score matches the official NCAA box score: sets played, kills, attack errors, total attacks, hitting %, assists, service aces, service errors, reception attempts and errors, digs, block solos, block assists, block errors, ball handling errors, and points.
 
 It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve type (jump spin, jump float, standing float), and front/back row attacks.
+
+## Known limits (end of Phase 1)
+
+- Data lives only on the device that recorded it. Phase 2 adds syncing to a server.
+- The app has to be loaded from a running dev server; it can't open with no connection yet. Phase 2 deploys it and makes it load offline.
+- One device records a match. Two stat keepers on the same match isn't supported.
+- Only the last play can be undone; older taps can't be edited.
+- Substitution limits and libero serving rules aren't enforced.
 
 ## Decisions
 
