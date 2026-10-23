@@ -1,5 +1,9 @@
 # Men's Volleyball Stat Tracker
 
+[![CI](https://github.com/JasonHuang155/mens-volleyball-stat-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/JasonHuang155/mens-volleyball-stat-tracker/actions/workflows/ci.yml)
+
+**Try it:** https://jasonhuang155.github.io/mens-volleyball-stat-tracker/ (works best on a phone; your data stays on your device)
+
 A courtside stat tracker for men's volleyball that records both teams, the way an NCAA stat crew does. It's built to show both software engineering and data engineering:
 
 - **Phase 1 (done):** a phone app for entering stats during a match
