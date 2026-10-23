@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router'
+import BoxScoreScreen from './screens/BoxScoreScreen.tsx'
 import HomeScreen from './screens/HomeScreen.tsx'
 import MatchScreen from './screens/MatchScreen.tsx'
 import NewMatchScreen from './screens/NewMatchScreen.tsx'
@@ -12,6 +13,7 @@ function App() {
       <Route path="/teams/:teamId" element={<RosterScreen />} />
       <Route path="/teams/:teamId/new-match" element={<NewMatchScreen />} />
       <Route path="/matches/:matchId" element={<MatchScreen />} />
+      <Route path="/matches/:matchId/box-score" element={<BoxScoreScreen />} />
     </Routes>
   )
 }

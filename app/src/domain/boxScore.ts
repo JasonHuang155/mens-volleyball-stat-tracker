@@ -88,6 +88,46 @@ export function buildBoxScore(events: MatchEvent[], players: Player[]): PlayerLi
   return players.map((player) => playerLine(events, player.id))
 }
 
+/**
+ * The team row at the bottom of the box score. Counts are added up, but the
+ * percentages are worked out again from the totals, not averaged: a player
+ * who went 1-for-1 shouldn't count as much as one who went 10-for-20.
+ */
+export function teamTotals(lines: PlayerLine[], setsPlayed: number): PlayerLine {
+  const sum = (stat: (line: PlayerLine) => number) => lines.reduce((total, line) => total + stat(line), 0)
+  const kills = sum((l) => l.kills)
+  const attackErrors = sum((l) => l.attackErrors)
+  const totalAttacks = sum((l) => l.totalAttacks)
+  const serviceAces = sum((l) => l.serviceAces)
+  const receptionAttempts = sum((l) => l.receptionAttempts)
+  const blockSolos = sum((l) => l.blockSolos)
+  const blockAssists = sum((l) => l.blockAssists)
+  // Each player's average times their attempts gives back the sum of their ratings.
+  const ratingTotal = sum((l) => (l.passAverage ?? 0) * l.receptionAttempts)
+
+  return {
+    playerId: 'team',
+    setsPlayed,
+    kills,
+    attackErrors,
+    totalAttacks,
+    hittingPercentage: hittingPercentage(kills, attackErrors, totalAttacks),
+    assists: sum((l) => l.assists),
+    serviceAces,
+    serviceErrors: sum((l) => l.serviceErrors),
+    receptionAttempts,
+    receptionErrors: sum((l) => l.receptionErrors),
+    passAverage: receptionAttempts === 0 ? null : ratingTotal / receptionAttempts,
+    digs: sum((l) => l.digs),
+    blockSolos,
+    blockAssists,
+    totalBlocks: totalBlocks(blockSolos, blockAssists),
+    blockErrors: sum((l) => l.blockErrors),
+    ballHandlingErrors: sum((l) => l.ballHandlingErrors),
+    points: points(kills, serviceAces, blockSolos, blockAssists),
+  }
+}
+
 function playerLine(events: MatchEvent[], playerId: string): PlayerLine {
   const line: PlayerLine = {
     playerId,

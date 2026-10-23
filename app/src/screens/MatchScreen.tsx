@@ -51,9 +51,16 @@ function MatchScreen() {
 
   return (
     <main className={playing ? 'screen screen-live' : 'screen'}>
-      <Link className="back-link" to="/">
-        ‹ Home
-      </Link>
+      <div className="top-links">
+        <Link className="back-link" to="/">
+          ‹ Home
+        </Link>
+        {state.setNumber > 0 && (
+          <Link className="back-link" to={`/matches/${match.id}/box-score`}>
+            Box score ›
+          </Link>
+        )}
+      </div>
       <h1 className={playing ? 'sr-only' : undefined}>vs {match.opponentName}</h1>
       <Scoreboard state={state} teamName={teamName} opponentName={match.opponentName} compact={playing} />
       {openFollowUp && (

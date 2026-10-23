@@ -600,6 +600,100 @@ h2 {
   color: var(--accent-text);
 }
 
+/* ---- Top links (Home, Box score) ---- */
+
+.top-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ---- Box score ---- */
+
+.screen-wide {
+  max-width: 960px;
+}
+
+.segmented-auto {
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+}
+
+/* The table scrolls sideways on a phone; the player column stays put. */
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.box-score {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.box-score th,
+.box-score td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+
+.box-score th[scope='row'],
+.box-score thead th:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  text-align: left;
+  font-weight: 600;
+}
+
+.box-score thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.box-score abbr {
+  text-decoration: none;
+}
+
+.box-score tfoot th,
+.box-score tfoot td {
+  font-weight: 700;
+  border-bottom: 0;
+}
+
+.legend summary {
+  cursor: pointer;
+  color: var(--accent);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.legend dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px 12px;
+  margin: 0 0 8px;
+}
+
+.legend dl div {
+  display: flex;
+  gap: 8px;
+}
+
+.legend dt {
+  font-weight: 700;
+  min-width: 40px;
+}
+
+.legend dd {
+  margin: 0;
+  color: var(--muted);
+}
+
 /* ---- "Assist by?" question ---- */
 
 .follow-up {

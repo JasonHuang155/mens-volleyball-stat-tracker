@@ -6,6 +6,7 @@ import {
   passAverage,
   points,
   setsPlayed,
+  teamTotals,
   totalBlocks,
 } from './boxScore.ts'
 import type { AttackBody, Player, ServeBody } from './types.ts'
@@ -245,5 +246,47 @@ describe('buildBoxScore', () => {
   it('leaves out undone plays (activeEvents removes them before they get here)', () => {
     const match = new MatchScript().startSet().kill('p4').undo()
     expect(lineFor(match, 'p4').kills).toBe(0)
+  })
+})
+
+describe('teamTotals', () => {
+  it('adds up the counts', () => {
+    const match = new MatchScript()
+      .startSet()
+      .kill('p4')
+      .kill('p2')
+      .record({ type: 'block', playerId: 'p3', result: 'assist' })
+      .followUp({ type: 'block', playerId: 'p2', result: 'assist' })
+    const team = teamTotals(boxScore(match), 1)
+    expect(team).toMatchObject({ playerId: 'team', setsPlayed: 1, kills: 2, blockAssists: 2, totalBlocks: 1, points: 3 })
+  })
+
+  it('works hitting percentage out from the totals instead of averaging players', () => {
+    const match = new MatchScript()
+      .startSet()
+      .record(attack('p4', 'kill'))
+      .record(attack('p4', 'in_play'))
+      .record(attack('p4', 'error'))
+      .record(attack('p4', 'in_play')) // p4: (1 - 1) / 4 = .000
+      .record(attack('p2', 'kill')) // p2: 1 / 1 = 1.000
+    // Averaging the two players would give .500. The team really hit (2 - 1) / 5 = .200.
+    expect(teamTotals(boxScore(match), 1).hittingPercentage).toBeCloseTo(0.2)
+  })
+
+  it('weights the pass average by how many passes each player had', () => {
+    const match = new MatchScript()
+      .startSet({ firstServe: 'them' })
+      .record({ type: 'pass', playerId: 'p5', result: 3 })
+      .record({ type: 'pass', playerId: 'p5', result: 3 })
+      .record({ type: 'pass', playerId: 'p5', result: 3 })
+      .record({ type: 'pass', playerId: 'p6', result: 1 })
+    // p5 averages 3 and p6 averages 1, but p5 had 3 of the 4 passes: (3 + 3 + 3 + 1) / 4 = 2.5
+    expect(teamTotals(boxScore(match), 1).passAverage).toBeCloseTo(2.5)
+  })
+
+  it('has no percentages when nobody attacked or passed', () => {
+    const team = teamTotals(boxScore(new MatchScript().startSet()), 1)
+    expect(team.hittingPercentage).toBe(null)
+    expect(team.passAverage).toBe(null)
   })
 })
