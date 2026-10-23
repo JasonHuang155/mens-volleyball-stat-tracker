@@ -6,7 +6,7 @@ describe('errorMessage', () => {
   it('shows the plain reason when a tap breaks the rules, without the event details', () => {
     let caught: unknown
     try {
-      new MatchScript().point('us')
+      new MatchScript().point('home')
     } catch (error) {
       caught = error
     }

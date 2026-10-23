@@ -9,40 +9,49 @@ import {
   teamTotals,
   totalBlocks,
 } from './boxScore.ts'
-import type { AttackBody, Player, ServeBody } from './types.ts'
+import type { AttackBody, Player, ServeBody, Side } from './types.ts'
 import { activeEvents } from './undo.ts'
 
-// The roster for these tests. p1-p6 start (p1 is the setter, in position 1),
-// p7 is on the bench, and L is the libero.
+// The home roster for these tests. p1-p6 start (p1 is the setter, in position 1),
+// p7 is on the bench, and L is the libero. Most tests only look at the home team.
 const players: Player[] = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'L'].map((id, i) => ({
   id,
-  teamId: 'team-1',
+  teamId: 'home-team',
   name: `Player ${id}`,
   number: i + 1,
   position: id === 'p1' ? 'S' : id === 'L' ? 'L' : 'OH',
 }))
+const awayPlayers: Player[] = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'].map((id, i) => ({
+  id,
+  teamId: 'away-team',
+  name: '',
+  number: i + 10,
+  position: 'OH',
+}))
 
-const attack = (playerId: string, result: AttackBody['result']): AttackBody => ({
+const attack = (playerId: string, result: AttackBody['result'], side: Side = 'home'): AttackBody => ({
   type: 'attack',
+  side,
   playerId,
   result,
   detail: { row: 'front' },
 })
 
-// p1 is always our server in these tests.
+// p1 is the home server in these tests.
 const serve = (result: ServeBody['result']): ServeBody => ({
   type: 'serve',
+  side: 'home',
   playerId: 'p1',
   result,
   detail: { serveType: 'jump_float' },
 })
 
-function boxScore(match: MatchScript) {
-  return buildBoxScore(activeEvents(match.events), players)
+function boxScore(match: MatchScript, roster: Player[] = players) {
+  return buildBoxScore(activeEvents(match.events), roster)
 }
 
 function lineFor(match: MatchScript, playerId: string) {
-  const line = boxScore(match).find((l) => l.playerId === playerId)
+  const line = boxScore(match, [...players, ...awayPlayers]).find((l) => l.playerId === playerId)
   if (!line) throw new Error(`the box score has no line for ${playerId}`)
   return line
 }
@@ -111,11 +120,16 @@ describe('setsPlayed', () => {
 
   it('counts the libero only in sets where they come on court', () => {
     const match = new MatchScript()
-      .startSet({ liberoId: 'L' })
+      .startSet({ home: { liberoId: 'L' } })
       .liberoSwap('L', 'p5')
       .playSetTo(25, 20)
-      .startSet({ liberoId: 'L' })
+      .startSet({ home: { liberoId: 'L' } })
     expect(setsPlayed(activeEvents(match.events), 'L')).toBe(1)
+  })
+
+  it('counts away players from the away lineup', () => {
+    const match = new MatchScript().startSet()
+    expect(setsPlayed(activeEvents(match.events), 'a3')).toBe(1)
   })
 
   it('counts a set once even if the player comes in twice', () => {
@@ -174,18 +188,18 @@ describe('buildBoxScore', () => {
       .startSet()
       .record(serve('ace'))
       .record(serve('in'))
-      .point('us')
+      .point('home')
       .record(serve('error'))
     expect(lineFor(match, 'p1')).toMatchObject({ serviceAces: 1, serviceErrors: 1 })
   })
 
   it('counts passes, reception errors, and pass average', () => {
     const match = new MatchScript()
-      .startSet({ firstServe: 'them' })
-      .record({ type: 'pass', playerId: 'p5', result: 3 })
-      .point('them')
-      .record({ type: 'pass', playerId: 'p6', result: 0 }) // aced
-      .record({ type: 'pass', playerId: 'p5', result: 2 })
+      .startSet({ firstServe: 'away' })
+      .record({ type: 'pass', side: 'home', playerId: 'p5', result: 3 })
+      .point('away')
+      .record({ type: 'pass', side: 'home', playerId: 'p6', result: 0 }) // aced
+      .record({ type: 'pass', side: 'home', playerId: 'p5', result: 2 })
       .record(attack('p4', 'kill'))
     expect(lineFor(match, 'p5')).toMatchObject({ receptionAttempts: 2, receptionErrors: 0, passAverage: 2.5 })
     expect(lineFor(match, 'p6')).toMatchObject({ receptionAttempts: 1, receptionErrors: 1, passAverage: 0 })
@@ -194,10 +208,10 @@ describe('buildBoxScore', () => {
   it('counts digs, assists, and ball handling errors', () => {
     const match = new MatchScript()
       .startSet()
-      .record({ type: 'dig', playerId: 'p5' })
+      .record({ type: 'dig', side: 'home', playerId: 'p5' })
       .kill('p4')
-      .followUp({ type: 'assist', playerId: 'p1' })
-      .record({ type: 'ball_handling_error', playerId: 'p1' })
+      .followUp({ type: 'assist', side: 'home', playerId: 'p1' })
+      .record({ type: 'ball_handling_error', side: 'home', playerId: 'p1' })
     expect(lineFor(match, 'p5')).toMatchObject({ digs: 1 })
     expect(lineFor(match, 'p1')).toMatchObject({ assists: 1, ballHandlingErrors: 1 })
   })
@@ -205,10 +219,10 @@ describe('buildBoxScore', () => {
   it('counts solo blocks, block assists for every blocker, and block errors', () => {
     const match = new MatchScript()
       .startSet()
-      .record({ type: 'block', playerId: 'p3', result: 'solo' })
-      .record({ type: 'block', playerId: 'p2', result: 'assist' })
-      .followUp({ type: 'block', playerId: 'p3', result: 'assist' })
-      .record({ type: 'block', playerId: 'p4', result: 'error' })
+      .record({ type: 'block', side: 'home', playerId: 'p3', result: 'solo' })
+      .record({ type: 'block', side: 'home', playerId: 'p2', result: 'assist' })
+      .followUp({ type: 'block', side: 'home', playerId: 'p3', result: 'assist' })
+      .record({ type: 'block', side: 'home', playerId: 'p4', result: 'error' })
     expect(lineFor(match, 'p3')).toMatchObject({ blockSolos: 1, blockAssists: 1, totalBlocks: 1.5 })
     expect(lineFor(match, 'p2')).toMatchObject({ blockSolos: 0, blockAssists: 1, totalBlocks: 0.5 })
     expect(lineFor(match, 'p4')).toMatchObject({ blockErrors: 1 })
@@ -220,9 +234,9 @@ describe('buildBoxScore', () => {
       .record(serve('ace'))
       .kill('p4')
       .kill('p4')
-      .record({ type: 'block', playerId: 'p3', result: 'solo' })
-      .record({ type: 'block', playerId: 'p3', result: 'assist' })
-      .followUp({ type: 'block', playerId: 'p2', result: 'assist' })
+      .record({ type: 'block', side: 'home', playerId: 'p3', result: 'solo' })
+      .record({ type: 'block', side: 'home', playerId: 'p3', result: 'assist' })
+      .followUp({ type: 'block', side: 'home', playerId: 'p2', result: 'assist' })
     expect(lineFor(match, 'p1').points).toBe(1)
     expect(lineFor(match, 'p4').points).toBe(2)
     expect(lineFor(match, 'p3').points).toBe(1.5)
@@ -235,12 +249,25 @@ describe('buildBoxScore', () => {
     expect(lineFor(match, 'p7').setsPlayed).toBe(0)
   })
 
-  it('gives no player credit for "their point" or "their error"', () => {
-    const lines = boxScore(new MatchScript().startSet().point('us').point('them'))
+  it('gives no player credit for a "point, no stat"', () => {
+    const lines = boxScore(new MatchScript().startSet().point('home').point('away'))
     expect(lines).toHaveLength(players.length)
     for (const line of lines) {
       expect(line).toMatchObject({ kills: 0, attackErrors: 0, serviceAces: 0, serviceErrors: 0, points: 0 })
     }
+  })
+
+  it('credits both teams on a linked play', () => {
+    const match = new MatchScript()
+      .startSet()
+      .record(serve('ace'))
+      .followUp({ type: 'pass', side: 'away', playerId: 'a5', result: 0 })
+      .record(attack('a4', 'error', 'away'))
+      .followUp({ type: 'block', side: 'home', playerId: 'p3', result: 'solo' })
+    expect(lineFor(match, 'p1')).toMatchObject({ serviceAces: 1, points: 1 })
+    expect(lineFor(match, 'a5')).toMatchObject({ receptionAttempts: 1, receptionErrors: 1, passAverage: 0 })
+    expect(lineFor(match, 'a4')).toMatchObject({ attackErrors: 1, totalAttacks: 1 })
+    expect(lineFor(match, 'p3')).toMatchObject({ blockSolos: 1, points: 1 })
   })
 
   it('leaves out undone plays (activeEvents removes them before they get here)', () => {
@@ -255,8 +282,8 @@ describe('teamTotals', () => {
       .startSet()
       .kill('p4')
       .kill('p2')
-      .record({ type: 'block', playerId: 'p3', result: 'assist' })
-      .followUp({ type: 'block', playerId: 'p2', result: 'assist' })
+      .record({ type: 'block', side: 'home', playerId: 'p3', result: 'assist' })
+      .followUp({ type: 'block', side: 'home', playerId: 'p2', result: 'assist' })
     const team = teamTotals(boxScore(match), 1)
     expect(team).toMatchObject({ playerId: 'team', setsPlayed: 1, kills: 2, blockAssists: 2, totalBlocks: 1, points: 3 })
   })
@@ -275,11 +302,11 @@ describe('teamTotals', () => {
 
   it('weights the pass average by how many passes each player had', () => {
     const match = new MatchScript()
-      .startSet({ firstServe: 'them' })
-      .record({ type: 'pass', playerId: 'p5', result: 3 })
-      .record({ type: 'pass', playerId: 'p5', result: 3 })
-      .record({ type: 'pass', playerId: 'p5', result: 3 })
-      .record({ type: 'pass', playerId: 'p6', result: 1 })
+      .startSet({ firstServe: 'away' })
+      .record({ type: 'pass', side: 'home', playerId: 'p5', result: 3 })
+      .record({ type: 'pass', side: 'home', playerId: 'p5', result: 3 })
+      .record({ type: 'pass', side: 'home', playerId: 'p5', result: 3 })
+      .record({ type: 'pass', side: 'home', playerId: 'p6', result: 1 })
     // p5 averages 3 and p6 averages 1, but p5 had 3 of the 4 passes: (3 + 3 + 3 + 1) / 4 = 2.5
     expect(teamTotals(boxScore(match), 1).passAverage).toBeCloseTo(2.5)
   })

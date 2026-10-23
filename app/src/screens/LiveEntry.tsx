@@ -4,11 +4,11 @@ import { describeEvent } from '../components/describeEvent.ts'
 import { errorMessage } from '../components/errorMessage.ts'
 import UndoButton from '../components/UndoButton.tsx'
 import { db } from '../db/database.ts'
-import { recordTap } from '../db/matches.ts'
+import { recordFollowUpTap, recordTap, type MatchData } from '../db/matches.ts'
+import { playerLabel } from '../db/roster.ts'
 import { courtRow } from '../domain/replay.ts'
-import type { Match, MatchEvent, MatchState, Player, ServeType, StatBody } from '../domain/types.ts'
+import type { MatchEvent, MatchState, Player, ServeType, Side, StatBody } from '../domain/types.ts'
 import { activeEvents, lastActiveEvent } from '../domain/undo.ts'
-import type { FollowUp } from './FollowUpStrip.tsx'
 import SubPanel from './SubPanel.tsx'
 
 const SERVE_TYPES: { value: ServeType; label: string }[] = [
@@ -18,39 +18,53 @@ const SERVE_TYPES: { value: ServeType; label: string }[] = [
 ]
 
 type Props = {
-  match: Match
-  players: Player[]
-  events: MatchEvent[]
+  data: MatchData
   state: MatchState
-  /** After a kill or block assist, the match screen asks who else was involved. */
-  onFollowUp: (followUp: FollowUp | null) => void
+  /** Called with each saved play, so the match screen can ask about the other players involved. */
+  onPlay: (actionId: string | null) => void
+  /** An open question about the last play ("Assist by?"), shown in place of the team buttons. */
+  question?: ReactNode
 }
 
-/** The courtside screen: tap a player, then what they did. */
-function LiveEntry({ match, players, events, state, onFollowUp }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+type Selected = { side: Side; player: Player }
+
+/** The courtside screen: both teams on one court. Tap a player, then what they did. */
+function LiveEntry({ data, state, onPlay, question }: Props) {
+  const { match, teams, rosters, events } = data
+  const [selected, setSelected] = useState<Selected | null>(null)
   const [showSubs, setShowSubs] = useState(false)
   const [serveTypeChoices, setServeTypeChoices] = useState<Record<string, ServeType>>({})
   const [error, setError] = useState('')
 
-  const byId = new Map(players.map((p) => [p.id, p]))
+  const names = { home: teams.home.name, away: teams.away.name }
+  const byId = new Map([...rosters.home, ...rosters.away].map((p) => [p.id, p]))
   const server = state.serverId ? byId.get(state.serverId) : undefined
   const last = lastActiveEvent(events)
-  const selected = selectedId ? byId.get(selectedId) : undefined
 
-  function selectPlayer(id: string) {
-    setSelectedId(id === selectedId ? null : id) // tapping the same player again deselects
+  function select(side: Side, player: Player) {
+    setSelected(selected?.player.id === player.id ? null : { side, player }) // tapping again deselects
     setShowSubs(false)
     setError('')
-    onFollowUp(null) // a new tap closes any open "Assist by?" question
+    onPlay(null) // a new tap closes any open question
   }
 
   async function save(body: StatBody) {
+    const serverBefore = state.serverId
     try {
       const event = await recordTap(db, match, body)
+      // A reception error is the other half of the server's ace, so add the ace too.
+      if (body.type === 'pass' && body.result === 0 && serverBefore) {
+        await recordFollowUpTap(db, match, {
+          type: 'serve',
+          side: state.servingSide,
+          playerId: serverBefore,
+          result: 'ace',
+          detail: { serveType: serveTypeFor(serverBefore) },
+        })
+      }
       setError('')
-      setSelectedId(null)
-      onFollowUp(followUpAfter(event))
+      setSelected(null)
+      onPlay(event.actionId)
     } catch (err) {
       setError(errorMessage(err))
     }
@@ -62,36 +76,50 @@ function LiveEntry({ match, players, events, state, onFollowUp }: Props) {
     return serveTypeChoices[playerId] ?? lastServeType(events, playerId) ?? 'jump_float'
   }
 
+  function renderCourt(side: Side) {
+    return (position: number) => {
+      const id = state.courts[side].lineup[position - 1]
+      const player = byId.get(id)
+      if (!player) return null
+      const serving = state.serverId === id
+      const isSelected = selected?.player.id === id
+      return (
+        <button
+          type="button"
+          className={`court-button side-${side}${isSelected ? ' court-button-selected' : ''}`}
+          aria-pressed={isSelected}
+          aria-label={`${names[side]} ${playerLabel(player)}${serving ? ', serving' : ''}`}
+          onClick={() => select(side, player)}
+        >
+          <span className="jersey">#{player.number}</span>
+          {player.name && <span className="court-name">{player.name}</span>}
+          {serving && <span className="badge">Serving</span>}
+          {id === state.courts[side].liberoId && <span className="badge">Libero</span>}
+        </button>
+      )
+    }
+  }
+
   return (
     <section className="live" aria-label="On court">
-      <p className="status-line">
-        {server ? `#${server.number} ${server.name} serving` : `${match.opponentName} serving`} · Rotation{' '}
-        {state.rotation}
-      </p>
-      {last && <p className="muted last-tap">Last: {describeEvent(last, byId)}</p>}
+      {/* Who's serving is shown by the dot on the scoreboard and the SERVING tag on the court. */}
+      {server && <p className="sr-only">{`${names[state.servingSide]} ${playerLabel(server)} serving`}</p>}
+      {last && <p className="muted last-tap">Last: {describeEvent(last, byId, names)}</p>}
 
-      <Court
-        renderSlot={(position) => {
-          const id = state.lineup[position - 1]
-          const player = byId.get(id)
-          const serving = state.serverId === id
-          return (
-            <button
-              type="button"
-              className={id === selectedId ? 'court-button court-button-selected' : 'court-button'}
-              aria-pressed={id === selectedId}
-              aria-label={`#${player?.number} ${player?.name}${serving ? ', serving' : ''}`}
-              onClick={() => selectPlayer(id)}
-            >
-              <span className="court-position">{position}</span>
-              <span className="jersey">#{player?.number}</span>
-              <span className="court-name">{player?.name}</span>
-              {serving && <span className="badge">Serving</span>}
-              {id === state.liberoId && <span className="badge">Libero</span>}
-            </button>
-          )
-        }}
-      />
+      <div className="full-court">
+        <Court
+          far
+          renderSlot={renderCourt('away')}
+          netLabel={
+            <>
+              <span className="side-away court-team-label">▲ {names.away}</span>
+              <span>Net</span>
+              <span className="side-home court-team-label">{names.home} ▼</span>
+            </>
+          }
+        />
+        <Court showNet={false} renderSlot={renderCourt('home')} />
+      </div>
 
       {error && (
         <p className="form-error" role="alert">
@@ -101,25 +129,32 @@ function LiveEntry({ match, players, events, state, onFollowUp }: Props) {
 
       {selected ? (
         <PlayerActions
-          player={selected}
+          teamName={names[selected.side]}
+          side={selected.side}
+          player={selected.player}
           state={state}
-          serveType={serveTypeFor(selected.id)}
-          onServeType={(type) => setServeTypeChoices({ ...serveTypeChoices, [selected.id]: type })}
+          serveType={serveTypeFor(selected.player.id)}
+          onServeType={(type) => setServeTypeChoices({ ...serveTypeChoices, [selected.player.id]: type })}
           onSave={save}
-          onCancel={() => setSelectedId(null)}
+          onCancel={() => setSelected(null)}
         />
       ) : showSubs ? (
-        <SubPanel match={match} players={players} state={state} onDone={() => setShowSubs(false)} />
+        <SubPanel data={data} state={state} onDone={() => setShowSubs(false)} />
+      ) : question ? (
+        question
       ) : (
         <section className="action-panel" aria-label="Team actions">
           <p className="muted">Tap a player, then what they did.</p>
           <div className="action-buttons action-buttons-2">
-            <ActionButton tone="bad" onClick={() => save({ type: 'their_point' })}>
-              Their point
-            </ActionButton>
-            <ActionButton tone="good" onClick={() => save({ type: 'their_error' })}>
-              Their error
-            </ActionButton>
+            {(['away', 'home'] as const).map((side) => (
+              <ActionButton
+                key={side}
+                label={`Point to ${names[side]}, no stat`}
+                onClick={() => save({ type: 'point', side })}
+              >
+                +1 {names[side]}
+              </ActionButton>
+            ))}
           </div>
           <div className="button-row">
             <UndoButton match={match} />
@@ -128,7 +163,7 @@ function LiveEntry({ match, players, events, state, onFollowUp }: Props) {
               type="button"
               onClick={() => {
                 setShowSubs(true)
-                onFollowUp(null)
+                onPlay(null)
               }}
             >
               Subs
@@ -141,6 +176,8 @@ function LiveEntry({ match, players, events, state, onFollowUp }: Props) {
 }
 
 type PlayerActionsProps = {
+  teamName: string
+  side: Side
   player: Player
   state: MatchState
   serveType: ServeType
@@ -150,17 +187,17 @@ type PlayerActionsProps = {
 }
 
 /** The outcome buttons for one player. Only the buttons that make sense right now are shown. */
-function PlayerActions({ player, state, serveType, onServeType, onSave, onCancel }: PlayerActionsProps) {
+function PlayerActions({ teamName, side, player, state, serveType, onServeType, onSave, onCancel }: PlayerActionsProps) {
   const playerId = player.id
-  const row = courtRow(state, playerId) ?? 'back'
+  const row = courtRow(state, side, playerId) ?? 'back'
   const serving = state.serverId === playerId
-  const receiving = state.servingTeam === 'them'
+  const receiving = state.servingSide !== side
 
   return (
-    <section className="action-panel" aria-label={`Stats for #${player.number} ${player.name}`}>
+    <section className={`action-panel side-${side}`} aria-label={`Stats for ${teamName} ${playerLabel(player)}`}>
       <div className="action-panel-title">
         <strong>
-          #{player.number} {player.name}
+          {playerLabel(player)} <span className="muted">{teamName}</span>
         </strong>
         <button className="button button-small" type="button" onClick={onCancel}>
           Cancel
@@ -183,13 +220,13 @@ function PlayerActions({ player, state, serveType, onServeType, onSave, onCancel
             ))}
           </div>
           <div className="action-buttons">
-            <ActionButton tone="good" onClick={() => onSave({ type: 'serve', playerId, result: 'ace', detail: { serveType } })}>
+            <ActionButton tone="good" onClick={() => onSave({ type: 'serve', side, playerId, result: 'ace', detail: { serveType } })}>
               Ace
             </ActionButton>
-            <ActionButton tone="bad" onClick={() => onSave({ type: 'serve', playerId, result: 'error', detail: { serveType } })}>
+            <ActionButton tone="bad" onClick={() => onSave({ type: 'serve', side, playerId, result: 'error', detail: { serveType } })}>
               Error
             </ActionButton>
-            <ActionButton onClick={() => onSave({ type: 'serve', playerId, result: 'in', detail: { serveType } })}>
+            <ActionButton onClick={() => onSave({ type: 'serve', side, playerId, result: 'in', detail: { serveType } })}>
               In
             </ActionButton>
           </div>
@@ -203,7 +240,7 @@ function PlayerActions({ player, state, serveType, onServeType, onSave, onCancel
               <ActionButton
                 key={rating}
                 tone={rating === 0 ? 'bad' : undefined}
-                onClick={() => onSave({ type: 'pass', playerId, result: rating })}
+                onClick={() => onSave({ type: 'pass', side, playerId, result: rating })}
               >
                 {rating}
               </ActionButton>
@@ -215,13 +252,13 @@ function PlayerActions({ player, state, serveType, onServeType, onSave, onCancel
       {/* Front or back row is filled in from where the player is standing. */}
       <ActionGroup label={row === 'front' ? 'Attack' : 'Attack, back row'}>
         <div className="action-buttons">
-          <ActionButton tone="good" onClick={() => onSave({ type: 'attack', playerId, result: 'kill', detail: { row } })}>
+          <ActionButton tone="good" onClick={() => onSave({ type: 'attack', side, playerId, result: 'kill', detail: { row } })}>
             Kill
           </ActionButton>
-          <ActionButton tone="bad" onClick={() => onSave({ type: 'attack', playerId, result: 'error', detail: { row } })}>
+          <ActionButton tone="bad" onClick={() => onSave({ type: 'attack', side, playerId, result: 'error', detail: { row } })}>
             Error
           </ActionButton>
-          <ActionButton onClick={() => onSave({ type: 'attack', playerId, result: 'in_play', detail: { row } })}>
+          <ActionButton onClick={() => onSave({ type: 'attack', side, playerId, result: 'in_play', detail: { row } })}>
             In play
           </ActionButton>
         </div>
@@ -231,13 +268,13 @@ function PlayerActions({ player, state, serveType, onServeType, onSave, onCancel
       {row === 'front' && (
         <ActionGroup label="Block">
           <div className="action-buttons">
-            <ActionButton tone="good" onClick={() => onSave({ type: 'block', playerId, result: 'solo' })}>
+            <ActionButton tone="good" onClick={() => onSave({ type: 'block', side, playerId, result: 'solo' })}>
               Solo
             </ActionButton>
-            <ActionButton tone="good" onClick={() => onSave({ type: 'block', playerId, result: 'assist' })}>
+            <ActionButton tone="good" onClick={() => onSave({ type: 'block', side, playerId, result: 'assist' })}>
               Assist
             </ActionButton>
-            <ActionButton tone="bad" onClick={() => onSave({ type: 'block', playerId, result: 'error' })}>
+            <ActionButton tone="bad" onClick={() => onSave({ type: 'block', side, playerId, result: 'error' })}>
               Error
             </ActionButton>
           </div>
@@ -246,13 +283,9 @@ function PlayerActions({ player, state, serveType, onServeType, onSave, onCancel
 
       <ActionGroup label="Other">
         <div className="action-buttons">
-          <ActionButton onClick={() => onSave({ type: 'dig', playerId })}>Dig</ActionButton>
-          <ActionButton onClick={() => onSave({ type: 'assist', playerId })}>Assist</ActionButton>
-          <ActionButton
-            tone="bad"
-            label="Ball handling error"
-            onClick={() => onSave({ type: 'ball_handling_error', playerId })}
-          >
+          <ActionButton onClick={() => onSave({ type: 'dig', side, playerId })}>Dig</ActionButton>
+          <ActionButton onClick={() => onSave({ type: 'assist', side, playerId })}>Assist</ActionButton>
+          <ActionButton tone="bad" label="Ball handling error" onClick={() => onSave({ type: 'ball_handling_error', side, playerId })}>
             BHE
           </ActionButton>
         </div>
@@ -278,7 +311,7 @@ type ActionButtonProps = {
   children: ReactNode
 }
 
-/** Green-ish for points to us, red-ish for points to them. */
+/** Green-ish for a point to that player's team, red-ish for a point to the other team. */
 function ActionButton({ tone, label, onClick, children }: ActionButtonProps) {
   const className = tone ? `button action-button action-${tone}` : 'button action-button'
   return (
@@ -286,17 +319,6 @@ function ActionButton({ tone, label, onClick, children }: ActionButtonProps) {
       {children}
     </button>
   )
-}
-
-/** After a kill, ask who set it. After a block assist, ask who else blocked. */
-function followUpAfter(event: MatchEvent): FollowUp | null {
-  if (event.type === 'attack' && event.result === 'kill') {
-    return { kind: 'assist', actionId: event.actionId, alreadyCredited: [event.playerId] }
-  }
-  if (event.type === 'block' && event.result === 'assist') {
-    return { kind: 'block', actionId: event.actionId, alreadyCredited: [event.playerId] }
-  }
-  return null
 }
 
 function lastServeType(events: MatchEvent[], playerId: string): ServeType | undefined {

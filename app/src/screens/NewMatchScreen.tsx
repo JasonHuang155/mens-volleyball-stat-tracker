@@ -1,30 +1,31 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { errorMessage } from '../components/errorMessage.ts'
 import { db } from '../db/database.ts'
 import { createMatch } from '../db/matches.ts'
+import { listTeams } from '../db/roster.ts'
 import type { BestOf } from '../domain/types.ts'
 
 function NewMatchScreen() {
-  const { teamId = '' } = useParams()
-  const team = useLiveQuery(async () => (await db.teams.get(teamId)) ?? null, [teamId])
+  const teams = useLiveQuery(() => listTeams(db))
   const navigate = useNavigate()
-  const [opponentName, setOpponentName] = useState('')
+  const [awayTeamId, setAwayTeamId] = useState('')
+  const [homeTeamId, setHomeTeamId] = useState('')
   const [bestOf, setBestOf] = useState<BestOf>(5)
   const [error, setError] = useState('')
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     try {
-      const match = await createMatch(db, { teamId, opponentName, bestOf })
-      navigate(`/matches/${match.id}`) // go straight to the set 1 lineup
+      const match = await createMatch(db, { homeTeamId, awayTeamId, bestOf })
+      navigate(`/matches/${match.id}`) // go straight to the set 1 lineups
     } catch (err) {
       setError(errorMessage(err))
     }
   }
 
-  if (team === undefined) return null
+  if (teams === undefined) return <p className="screen muted">Loading…</p>
   return (
     <main className="screen">
       <Link className="back-link" to="/">
@@ -32,11 +33,26 @@ function NewMatchScreen() {
       </Link>
       <h1>New match</h1>
       <form className="card" aria-label="New match" onSubmit={handleSubmit}>
-        {team && <p className="muted">{team.name} vs</p>}
-        <label className="field">
-          Opponent
-          <input type="text" value={opponentName} onChange={(e) => setOpponentName(e.target.value)} />
-        </label>
+        <div className="player-form-row">
+          {(
+            [
+              ['Away team', awayTeamId, setAwayTeamId],
+              ['Home team', homeTeamId, setHomeTeamId],
+            ] as const
+          ).map(([label, value, setValue]) => (
+            <label key={label} className="field field-grow">
+              {label}
+              <select value={value} onChange={(e) => setValue(e.target.value)}>
+                <option value="">Pick</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
 
         <fieldset className="segmented segmented-2">
           <legend>Match length</legend>

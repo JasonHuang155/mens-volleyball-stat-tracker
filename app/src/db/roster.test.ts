@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDatabase, type StatsDatabase } from './database.ts'
 import { createMatch, recordTap } from './matches.ts'
-import { addPlayer, createTeam, deletePlayer, listPlayers, listTeams, updatePlayer } from './roster.ts'
+import { addPlayer, createTeam, deletePlayer, listPlayers, listTeams, playerLabel, updatePlayer } from './roster.ts'
 
 // Each test gets its own empty database, deleted afterwards.
 let db: StatsDatabase
@@ -14,10 +14,11 @@ afterEach(async () => {
 })
 
 describe('teams', () => {
-  it('saves a team', async () => {
-    const team = await createTeam(db, '  Huskies ')
-    expect(team.name).toBe('Huskies')
-    expect(await listTeams(db)).toEqual([team])
+  it('saves teams and lists them alphabetically', async () => {
+    const rivals = await createTeam(db, 'Rivals')
+    const huskies = await createTeam(db, '  Huskies ')
+    expect(huskies.name).toBe('Huskies')
+    expect(await listTeams(db)).toEqual([huskies, rivals])
   })
 
   it('needs a name', async () => {
@@ -34,6 +35,13 @@ describe('players', () => {
     expect(await listPlayers(db, team.id)).toEqual([libero, setter])
   })
 
+  it('lets a player be saved with just a number', async () => {
+    const team = await createTeam(db, 'Rivals')
+    const player = await addPlayer(db, team.id, { name: '  ', number: 9, position: 'OH' })
+    expect(player.name).toBe('')
+    expect(playerLabel(player)).toBe('#9')
+  })
+
   it('keeps each team’s roster separate', async () => {
     const a = await createTeam(db, 'Team A')
     const b = await createTeam(db, 'Team B')
@@ -42,16 +50,17 @@ describe('players', () => {
     expect(await listPlayers(db, a.id)).toHaveLength(1)
   })
 
-  it('rejects a missing name, a bad number, or a number already taken', async () => {
+  it('rejects a bad number or a number already taken', async () => {
     const team = await createTeam(db, 'Huskies')
     await addPlayer(db, team.id, { name: 'Max Middle', number: 7, position: 'MB' })
-    await expect(addPlayer(db, team.id, { name: ' ', number: 8, position: 'OH' })).rejects.toThrow('Enter a player name')
+    await addPlayer(db, team.id, { name: '', number: 8, position: 'OH' })
     await expect(addPlayer(db, team.id, { name: 'X', number: 100, position: 'OH' })).rejects.toThrow(
       'Jersey numbers go from 0 to 99',
     )
     await expect(addPlayer(db, team.id, { name: 'X', number: 7, position: 'OH' })).rejects.toThrow(
       "#7 is already Max Middle's number",
     )
+    await expect(addPlayer(db, team.id, { name: 'X', number: 8, position: 'OH' })).rejects.toThrow('#8 is already taken')
   })
 
   it('updates a player, still checking the number', async () => {
@@ -73,22 +82,30 @@ describe('players', () => {
   })
 
   it('won’t delete a player who appears in a match', async () => {
-    const team = await createTeam(db, 'Huskies')
-    const ids = []
+    const home = await createTeam(db, 'Huskies')
+    const away = await createTeam(db, 'Rivals')
+    const homeIds = []
+    const awayIds = []
     for (let n = 1; n <= 7; n++) {
-      ids.push((await addPlayer(db, team.id, { name: `Player ${n}`, number: n, position: 'OH' })).id)
+      homeIds.push((await addPlayer(db, home.id, { name: `Player ${n}`, number: n, position: 'OH' })).id)
+      awayIds.push((await addPlayer(db, away.id, { name: '', number: n, position: 'OH' })).id)
     }
-    const match = await createMatch(db, { teamId: team.id, opponentName: 'Rivals', bestOf: 5 })
+    const match = await createMatch(db, { homeTeamId: home.id, awayTeamId: away.id, bestOf: 5 })
     await recordTap(db, match, {
       type: 'set_start',
-      detail: { lineup: ids.slice(0, 6), setterId: ids[0], liberoId: null, firstServe: 'us' },
+      detail: {
+        home: { players: homeIds.slice(0, 6), setterId: homeIds[0], liberoId: null },
+        away: { players: awayIds.slice(0, 6), setterId: awayIds[0], liberoId: null },
+        firstServe: 'home',
+      },
     })
 
-    // ids[5] only appears in the starting lineup; ids[6] never played.
-    await expect(deletePlayer(db, ids[5])).rejects.toThrow(
+    // Each of these only appears in a starting lineup; homeIds[6] never played.
+    await expect(deletePlayer(db, homeIds[5])).rejects.toThrow(
       "This player has played in a match, so they can't be deleted",
     )
-    await deletePlayer(db, ids[6])
-    expect(await listPlayers(db, team.id)).toHaveLength(6)
+    await expect(deletePlayer(db, awayIds[2])).rejects.toThrow('This player has played in a match')
+    await deletePlayer(db, homeIds[6])
+    expect(await listPlayers(db, home.id)).toHaveLength(6)
   })
 })

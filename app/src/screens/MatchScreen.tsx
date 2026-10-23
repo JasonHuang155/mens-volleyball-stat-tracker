@@ -4,31 +4,22 @@ import { Link, useParams } from 'react-router'
 import Scoreboard from '../components/Scoreboard.tsx'
 import UndoButton from '../components/UndoButton.tsx'
 import { db } from '../db/database.ts'
-import { getEvents, getMatch } from '../db/matches.ts'
-import { listPlayers } from '../db/roster.ts'
+import { getMatchData } from '../db/matches.ts'
+import { nextQuestion } from '../domain/plays.ts'
 import { replay } from '../domain/replay.ts'
 import { lastActiveEvent } from '../domain/undo.ts'
-import FollowUpStrip, { type FollowUp } from './FollowUpStrip.tsx'
+import FollowUpStrip, { type FollowUpState } from './FollowUpStrip.tsx'
 import LiveEntry from './LiveEntry.tsx'
 import SetLineup from './SetLineup.tsx'
 
 /** One match. Shows the lineup form between sets and the tap screen during a set. */
 function MatchScreen() {
   const { matchId = '' } = useParams()
-  const data = useLiveQuery(async () => {
-    const match = await getMatch(db, matchId)
-    if (!match) return null
-    const [team, players, events] = await Promise.all([
-      db.teams.get(match.teamId),
-      listPlayers(db, match.teamId),
-      getEvents(db, matchId),
-    ])
-    return { match, teamName: team?.name ?? 'Us', players, events }
-  }, [matchId])
+  const data = useLiveQuery(() => getMatchData(db, matchId), [matchId])
   // Lives here, not in LiveEntry, so "Assist by?" still shows after the kill that ends a set.
-  const [followUp, setFollowUp] = useState<FollowUp | null>(null)
+  const [followUp, setFollowUp] = useState<FollowUpState | null>(null)
 
-  if (data === undefined) return null
+  if (data === undefined) return <p className="screen muted">Loading…</p>
   if (data === null) {
     return (
       <main className="screen">
@@ -40,11 +31,18 @@ function MatchScreen() {
     )
   }
 
-  const { match, teamName, players, events } = data
+  const { match, teams, events } = data
+  const names = { home: teams.home.name, away: teams.away.name }
   // The whole match state is rebuilt from the saved taps every time something changes.
   const state = replay(match, events)
-  // Only ask about the play that was just made: any newer tap or an undo hides the question.
-  const openFollowUp = followUp && lastActiveEvent(events)?.actionId === followUp.actionId ? followUp : null
+  // Only ask about the play that was just made (any newer tap or an undo hides the
+  // question), and only while there's still something to ask.
+  const openFollowUp =
+    followUp &&
+    lastActiveEvent(events)?.actionId === followUp.actionId &&
+    nextQuestion(events, followUp.actionId, followUp.skipped)
+      ? followUp
+      : null
   // During a set, everything should fit on a phone screen without scrolling,
   // so the heading is hidden (the scoreboard shows both names) and things are tighter.
   const playing = state.status === 'playing'
@@ -61,41 +59,38 @@ function MatchScreen() {
           </Link>
         )}
       </div>
-      <h1 className={playing ? 'sr-only' : undefined}>vs {match.opponentName}</h1>
-      <Scoreboard state={state} teamName={teamName} opponentName={match.opponentName} compact={playing} />
-      {openFollowUp && (
-        <FollowUpStrip followUp={openFollowUp} match={match} players={players} state={state} onChange={setFollowUp} />
+      <h1 className={playing ? 'sr-only' : undefined}>
+        {names.away} at {names.home}
+      </h1>
+      <Scoreboard state={state} teamNames={names} compact={playing} />
+      {/* During a set the question sits in the tap screen's button area, so the court doesn't jump. */}
+      {openFollowUp && !playing && (
+        <FollowUpStrip data={data} state={state} followUp={openFollowUp} onChange={setFollowUp} />
       )}
 
       {state.status === 'waiting_for_lineup' && (
         <>
           {/* key: a fresh form for each set */}
-          <SetLineup
-            key={state.setNumber}
-            match={match}
-            teamName={teamName}
-            players={players}
-            events={events}
-            state={state}
-          />
+          <SetLineup key={state.setNumber} data={data} state={state} />
           {state.setNumber > 0 && <UndoButton match={match} />}
         </>
       )}
-      {state.status === 'playing' && (
+      {playing && (
         <LiveEntry
           key={state.setNumber}
-          match={match}
-          players={players}
-          events={events}
+          data={data}
           state={state}
-          onFollowUp={setFollowUp}
+          onPlay={(actionId) => setFollowUp(actionId ? { actionId, skipped: [] } : null)}
+          question={
+            openFollowUp && <FollowUpStrip data={data} state={state} followUp={openFollowUp} onChange={setFollowUp} />
+          }
         />
       )}
-      {state.status === 'finished' && (
+      {state.status === 'finished' && state.winner && (
         <section className="card">
-          <h2>{state.winner === 'us' ? `${teamName} won` : `${match.opponentName} won`}</h2>
+          <h2>{names[state.winner]} won</h2>
           <p className="muted">
-            Sets {state.setsWon.us}–{state.setsWon.them}
+            Sets {state.setsWon.away}–{state.setsWon.home} ({names.away}–{names.home})
           </p>
           <UndoButton match={match} />
         </section>

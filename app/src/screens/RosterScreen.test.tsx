@@ -3,9 +3,9 @@ import { screen, within } from '@testing-library/react'
 import type { UserEvent } from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { db } from '../db/database.ts'
-import { createMatch, recordTap } from '../db/matches.ts'
 import { addPlayer, createTeam } from '../db/roster.ts'
 import type { Position } from '../domain/types.ts'
+import { setUpMatch, startSet } from '../test/fixtures.ts'
 import { renderApp } from '../test/renderApp.tsx'
 
 async function openRoster() {
@@ -18,7 +18,7 @@ async function openRoster() {
 async function addThroughForm(user: UserEvent, number: string, name: string, position: Position) {
   const form = screen.getByRole('form', { name: 'Add a player' })
   if (number) await user.type(within(form).getByLabelText('Number'), number)
-  if (name) await user.type(within(form).getByLabelText('Name'), name)
+  if (name) await user.type(within(form).getByLabelText('Name (optional)'), name)
   await user.click(within(form).getByRole('radio', { name: position }))
   await user.click(within(form).getByRole('button', { name: 'Add player' }))
 }
@@ -56,7 +56,7 @@ describe('roster screen', () => {
     await addThroughForm(user, '', 'No Number', 'OH')
     expect((await screen.findByRole('alert')).textContent).toBe('Enter a jersey number')
 
-    await user.clear(screen.getByLabelText('Name'))
+    await user.clear(screen.getByLabelText('Name (optional)'))
     await addThroughForm(user, '7', 'Max Middle', 'MB')
     await screen.findByText('1 player')
     await addThroughForm(user, '7', 'Another Seven', 'OH')
@@ -69,8 +69,8 @@ describe('roster screen', () => {
 
     await user.click(await screen.findByRole('button', { name: /Max Midle/ }))
     const form = screen.getByRole('form', { name: 'Edit #7 Max Midle' })
-    await user.clear(within(form).getByLabelText('Name'))
-    await user.type(within(form).getByLabelText('Name'), 'Max Middle')
+    await user.clear(within(form).getByLabelText('Name (optional)'))
+    await user.type(within(form).getByLabelText('Name (optional)'), 'Max Middle')
     await user.click(within(form).getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByRole('button', { name: /Max Middle/ })).toBeTruthy()
@@ -90,19 +90,19 @@ describe('roster screen', () => {
     expect(await db.players.count()).toBe(0)
   })
 
-  it('won’t delete a player who has played in a match', async () => {
-    const { team, user } = await openRoster()
-    const ids = []
-    for (let n = 1; n <= 6; n++) {
-      ids.push((await addPlayer(db, team.id, { name: `Player ${n}`, number: n, position: 'OH' })).id)
-    }
-    const match = await createMatch(db, { teamId: team.id, opponentName: 'Rivals', bestOf: 5 })
-    await recordTap(db, match, {
-      type: 'set_start',
-      detail: { lineup: ids, setterId: ids[0], liberoId: null, firstServe: 'us' },
-    })
+  it('lets a player be added with just a number', async () => {
+    const { user } = await openRoster()
+    await addThroughForm(user, '9', '', 'OH')
+    await screen.findByText('1 player')
+    expect(await rosterRows()).toEqual(['#9OH'])
+  })
 
-    await user.click(await screen.findByRole('button', { name: /Player 1/ }))
+  it('won’t delete a player who has played in a match', async () => {
+    const fixture = await setUpMatch()
+    await startSet(fixture)
+    const { user } = renderApp(`/teams/${fixture.teams.home.id}`)
+
+    await user.click(await screen.findByRole('button', { name: /Sam Setter/ }))
     await user.click(screen.getByRole('button', { name: 'Delete' }))
     await user.click(screen.getByRole('button', { name: 'Tap again to delete' }))
     expect((await screen.findByRole('alert')).textContent).toBe(

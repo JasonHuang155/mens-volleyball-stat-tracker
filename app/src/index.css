@@ -10,6 +10,8 @@
   --accent-text: #ffffff;
   --danger: #c02626;
   --good: #16794a;
+  --home: #1d5fd1;
+  --away: #c2570c;
   --tap: 56px; /* minimum height of anything you tap; the usual minimum is 44px */
   --radius: 12px;
 
@@ -30,6 +32,8 @@
     --accent-text: #0b0d10;
     --danger: #f07171;
     --good: #4fcf8a;
+    --home: #5b8ef0;
+    --away: #f0954f;
   }
 }
 
@@ -160,6 +164,16 @@ h2 {
 .form-error {
   color: var(--danger);
   margin: 0;
+}
+
+.error-details {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-size: 0.85rem;
 }
 
 .player-form {
@@ -446,6 +460,98 @@ h2 {
   white-space: nowrap;
 }
 
+/* ---- Team colors: home is blue, away is orange ---- */
+
+.side-home {
+  --team: var(--home);
+}
+
+.side-away {
+  --team: var(--away);
+}
+
+.score-row .serve-dot {
+  background: var(--team);
+}
+
+.score-row .serve-dot-off {
+  background: transparent;
+}
+
+.court-button.side-home,
+.court-button.side-away {
+  border-color: color-mix(in srgb, var(--team) 45%, var(--border));
+}
+
+.court-button.court-button-selected {
+  border-color: var(--team);
+  background: color-mix(in srgb, var(--team) 20%, var(--surface));
+}
+
+.court-team-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--team);
+}
+
+/* On the tap screen the net line also names the teams: "▲ Rivals   Net   Huskies ▼". */
+.full-court .court-net {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.score-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.score-rotation {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.full-court {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.team-lineup {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.team-lineup legend {
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.set-scores {
+  align-self: flex-start; /* only as wide as its numbers */
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-scores th,
+.set-scores td {
+  padding: 4px 12px 4px 0;
+  text-align: left;
+}
+
+.follow-up-button[aria-pressed='true'] {
+  background: var(--team, var(--accent));
+  border-color: var(--team, var(--accent));
+  color: var(--accent-text);
+}
+
 /* ---- Courtside tap screen ---- */
 
 /* Tighter spacing so a whole rally's worth of buttons fits on a phone without scrolling. */
@@ -473,7 +579,7 @@ h2 {
 }
 
 .screen-live .court-button {
-  min-height: 62px;
+  min-height: 52px;
 }
 
 .screen-live .court-name {
@@ -697,7 +803,7 @@ h2 {
 /* ---- "Assist by?" question ---- */
 
 .follow-up {
-  border: 2px solid var(--accent);
+  border: 2px solid var(--team, var(--accent));
   border-radius: var(--radius);
   padding: 12px;
   display: flex;

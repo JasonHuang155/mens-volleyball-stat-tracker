@@ -11,7 +11,7 @@ function App() {
     <Routes>
       <Route path="/" element={<HomeScreen />} />
       <Route path="/teams/:teamId" element={<RosterScreen />} />
-      <Route path="/teams/:teamId/new-match" element={<NewMatchScreen />} />
+      <Route path="/new-match" element={<NewMatchScreen />} />
       <Route path="/matches/:matchId" element={<MatchScreen />} />
       <Route path="/matches/:matchId/box-score" element={<BoxScoreScreen />} />
     </Routes>

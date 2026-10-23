@@ -1,16 +1,18 @@
-import type { MatchState } from '../domain/types.ts'
+import type { MatchState, Side } from '../domain/types.ts'
 
 type Props = {
   state: MatchState
-  teamName: string
-  opponentName: string
+  teamNames: Record<Side, string>
   /** Smaller, for the tap screen, where every bit of height counts. */
   compact?: boolean
 }
 
-/** Sets won, the current set's score, and a dot by whoever is serving. */
-function Scoreboard({ state, teamName, opponentName, compact = false }: Props) {
-  const current = state.sets[state.sets.length - 1] ?? { us: 0, them: 0 }
+/**
+ * Sets won, the current set's score, and a dot by whoever is serving.
+ * Away is on top, matching the tap screen (away court at the top).
+ */
+function Scoreboard({ state, teamNames, compact = false }: Props) {
+  const current = state.sets[state.sets.length - 1] ?? { home: 0, away: 0 }
   const playing = state.status === 'playing'
   const label =
     state.setNumber === 0 ? 'Not started' : playing ? `Set ${state.setNumber}` : `Set ${state.setNumber} final`
@@ -18,26 +20,31 @@ function Scoreboard({ state, teamName, opponentName, compact = false }: Props) {
   return (
     <section className={compact ? 'scoreboard scoreboard-compact' : 'scoreboard'} aria-label="Score">
       <p className="scoreboard-label">{label}</p>
-      <ScoreRow name={teamName} sets={state.setsWon.us} points={current.us} serving={playing && state.servingTeam === 'us'} />
-      <ScoreRow
-        name={opponentName}
-        sets={state.setsWon.them}
-        points={current.them}
-        serving={playing && state.servingTeam === 'them'}
-      />
+      {(['away', 'home'] as const).map((side) => (
+        <ScoreRow
+          key={side}
+          side={side}
+          name={teamNames[side]}
+          sets={state.setsWon[side]}
+          points={current[side]}
+          serving={playing && state.servingSide === side}
+          rotation={playing ? state.courts[side].rotation : null}
+        />
+      ))}
     </section>
   )
 }
 
-type RowProps = { name: string; sets: number; points: number; serving: boolean }
+type RowProps = { side: Side; name: string; sets: number; points: number; serving: boolean; rotation: number | null }
 
-function ScoreRow({ name, sets, points, serving }: RowProps) {
+function ScoreRow({ side, name, sets, points, serving, rotation }: RowProps) {
   return (
-    <div className="score-row">
+    <div className={`score-row side-${side}`}>
       <span className="score-team">
         <span className={serving ? 'serve-dot' : 'serve-dot serve-dot-off'} aria-hidden="true" />
-        {name}
+        <span className="score-name">{name}</span>
         {serving && <span className="sr-only"> (serving)</span>}
+        {rotation !== null && <span className="score-rotation">Rot {rotation}</span>}
       </span>
       <span className="score-sets">
         {sets}

@@ -1,30 +1,41 @@
 import type { AttackBody, BestOf, BlockBody, EventBody, ServeBody, Side } from './types.ts'
 
-// The "who gets the point" table. null means the rally keeps going.
-const SERVE_POINT: Record<ServeBody['result'], Side | null> = { ace: 'us', error: 'them', in: null }
-const ATTACK_POINT: Record<AttackBody['result'], Side | null> = {
-  kill: 'us',
-  error: 'them', // includes getting blocked
+export function otherSide(side: Side): Side {
+  return side === 'home' ? 'away' : 'home'
+}
+
+// The "who gets the point" table, from the point of view of the player's own team.
+// 'own' = their team wins the point, 'other' = the other team does, null = the rally keeps going.
+type Outcome = 'own' | 'other' | null
+const SERVE: Record<ServeBody['result'], Outcome> = { ace: 'own', error: 'other', in: null }
+const ATTACK: Record<AttackBody['result'], Outcome> = {
+  kill: 'own',
+  error: 'other', // includes getting blocked
   in_play: null,
 }
-const BLOCK_POINT: Record<BlockBody['result'], Side> = { solo: 'us', assist: 'us', error: 'them' }
+const BLOCK: Record<BlockBody['result'], Outcome> = { solo: 'own', assist: 'own', error: 'other' }
 
 /** Which team this tap gives the point to, or null if the rally keeps going. */
 export function pointWinner(body: EventBody): Side | null {
+  const outcome = outcomeOf(body)
+  if (outcome === null || !('side' in body)) return null
+  return outcome === 'own' ? body.side : otherSide(body.side)
+}
+
+function outcomeOf(body: EventBody): Outcome {
   switch (body.type) {
     case 'serve':
-      return SERVE_POINT[body.result]
+      return SERVE[body.result]
     case 'pass':
-      return body.result === 0 ? 'them' : null // a 0 pass means we got aced
+      return body.result === 0 ? 'other' : null // a 0 pass means they got aced
     case 'attack':
-      return ATTACK_POINT[body.result]
+      return ATTACK[body.result]
     case 'block':
-      return BLOCK_POINT[body.result]
+      return BLOCK[body.result]
     case 'ball_handling_error':
-    case 'their_point':
-      return 'them'
-    case 'their_error':
-      return 'us'
+      return 'other'
+    case 'point':
+      return 'own'
     default:
       return null // dig, assist, set_start, substitution, undo
   }
@@ -41,10 +52,10 @@ export function pointsToWinSet(setNumber: number, bestOf: BestOf): number {
 }
 
 /** Who has won the set at this score, or null if it isn't over. You must win by 2. */
-export function setWinner(us: number, them: number, setNumber: number, bestOf: BestOf): Side | null {
+export function setWinner(home: number, away: number, setNumber: number, bestOf: BestOf): Side | null {
   const target = pointsToWinSet(setNumber, bestOf)
-  if (us >= target && us - them >= 2) return 'us'
-  if (them >= target && them - us >= 2) return 'them'
+  if (home >= target && home - away >= 2) return 'home'
+  if (away >= target && away - home >= 2) return 'away'
   return null
 }
 
@@ -56,7 +67,7 @@ export function setsNeededToWin(bestOf: BestOf): number {
 /** Who has won the match, or null if it isn't over. */
 export function matchWinner(setsWon: Record<Side, number>, bestOf: BestOf): Side | null {
   const needed = setsNeededToWin(bestOf)
-  if (setsWon.us >= needed) return 'us'
-  if (setsWon.them >= needed) return 'them'
+  if (setsWon.home >= needed) return 'home'
+  if (setsWon.away >= needed) return 'away'
   return null
 }

@@ -3,10 +3,11 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { formatAverage, formatHalf, formatHitting } from '../components/formatStats.ts'
 import { db } from '../db/database.ts'
-import { getEvents, getMatch } from '../db/matches.ts'
-import { listPlayers } from '../db/roster.ts'
+import { getMatchData } from '../db/matches.ts'
+import { playerLabel } from '../db/roster.ts'
 import { buildBoxScore, teamTotals, type PlayerLine } from '../domain/boxScore.ts'
 import { replay } from '../domain/replay.ts'
+import type { MatchEvent, Player } from '../domain/types.ts'
 import { activeEvents } from '../domain/undo.ts'
 
 type Column = { abbr: string; title: string; value: (line: PlayerLine) => string }
@@ -33,22 +34,13 @@ const COLUMNS: Column[] = [
   { abbr: 'PTS', title: 'Points', value: (l) => formatHalf(l.points) },
 ]
 
-/** Every player's stats for the match, or for one set, counted from the saved taps. */
+/** Both teams' stats for the match, or for one set, counted from the saved taps. */
 function BoxScoreScreen() {
   const { matchId = '' } = useParams()
-  const data = useLiveQuery(async () => {
-    const match = await getMatch(db, matchId)
-    if (!match) return null
-    const [team, players, events] = await Promise.all([
-      db.teams.get(match.teamId),
-      listPlayers(db, match.teamId),
-      getEvents(db, matchId),
-    ])
-    return { match, teamName: team?.name ?? 'Us', players, events }
-  }, [matchId])
+  const data = useLiveQuery(() => getMatchData(db, matchId), [matchId])
   const [setFilter, setSetFilter] = useState<number | 'match'>('match')
 
-  if (data === undefined) return null
+  if (data === undefined) return <p className="screen muted">Loading…</p>
   if (data === null) {
     return (
       <main className="screen">
@@ -60,14 +52,10 @@ function BoxScoreScreen() {
     )
   }
 
-  const { match, teamName, players, events } = data
+  const { match, teams, rosters, events } = data
   const state = replay(match, events)
   const counted = activeEvents(events).filter((e) => setFilter === 'match' || e.setNumber === setFilter)
-  const lines = buildBoxScore(counted, players)
-  // Only list players who got on the court. (Anyone with a stat was on the court.)
-  const played = lines.filter((line) => line.setsPlayed > 0)
-  const team = teamTotals(played, setFilter === 'match' ? state.setNumber : 1)
-  const byId = new Map(players.map((p) => [p.id, p]))
+  const setsShown = setFilter === 'match' ? state.setNumber : 1
 
   return (
     <main className="screen screen-wide">
@@ -78,9 +66,22 @@ function BoxScoreScreen() {
       </div>
       <h1>Box score</h1>
       <p className="muted">
-        {teamName} vs {match.opponentName}
-        {state.sets.length > 0 && ` · ${state.sets.map((s) => `${s.us}–${s.them}`).join(', ')}`}
+        {teams.away.name} at {teams.home.name}
       </p>
+      {state.sets.length > 0 && (
+        <table className="set-scores" aria-label="Set scores">
+          <tbody>
+            {(['away', 'home'] as const).map((side) => (
+              <tr key={side}>
+                <th scope="row">{teams[side].name}</th>
+                {state.sets.map((set, i) => (
+                  <td key={i}>{set[side]}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       {state.setNumber > 1 && (
         <fieldset className="segmented segmented-auto">
@@ -99,46 +100,13 @@ function BoxScoreScreen() {
         </fieldset>
       )}
 
-      {played.length === 0 ? (
+      {state.setNumber === 0 ? (
         <p className="muted">No stats yet. They show up here as you record taps.</p>
       ) : (
-        <div className="table-scroll">
-          <table className="box-score" aria-label="Box score">
-            <thead>
-              <tr>
-                <th scope="col">Player</th>
-                {COLUMNS.map((c) => (
-                  <th key={c.abbr} scope="col">
-                    <abbr title={c.title}>{c.abbr}</abbr>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {played.map((line) => {
-                const player = byId.get(line.playerId)
-                return (
-                  <tr key={line.playerId}>
-                    <th scope="row">
-                      #{player?.number} {player?.name}
-                    </th>
-                    {COLUMNS.map((c) => (
-                      <td key={c.abbr}>{c.value(line)}</td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <th scope="row">Team</th>
-                {COLUMNS.map((c) => (
-                  <td key={c.abbr}>{c.value(team)}</td>
-                ))}
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        // Away team first, the way NCAA box scores list them.
+        (['away', 'home'] as const).map((side) => (
+          <TeamTable key={side} teamName={teams[side].name} roster={rosters[side]} events={counted} sets={setsShown} />
+        ))
       )}
 
       <details className="legend">
@@ -157,6 +125,57 @@ function BoxScoreScreen() {
         </p>
       </details>
     </main>
+  )
+}
+
+type TeamTableProps = { teamName: string; roster: Player[]; events: MatchEvent[]; sets: number }
+
+/** One team's box score, with a team row at the bottom. */
+function TeamTable({ teamName, roster, events, sets }: TeamTableProps) {
+  // Only list players who got on the court. (Anyone with a stat was on the court.)
+  const played = buildBoxScore(events, roster).filter((line) => line.setsPlayed > 0)
+  const team = teamTotals(played, sets)
+  const byId = new Map(roster.map((p) => [p.id, p]))
+
+  return (
+    <section aria-label={`${teamName} box score`}>
+      <h2>{teamName}</h2>
+      <div className="table-scroll">
+        <table className="box-score" aria-label={`${teamName} stats`}>
+          <thead>
+            <tr>
+              <th scope="col">Player</th>
+              {COLUMNS.map((c) => (
+                <th key={c.abbr} scope="col">
+                  <abbr title={c.title}>{c.abbr}</abbr>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {played.map((line) => {
+              const player = byId.get(line.playerId)
+              return (
+                <tr key={line.playerId}>
+                  <th scope="row">{player ? playerLabel(player) : '?'}</th>
+                  {COLUMNS.map((c) => (
+                    <td key={c.abbr}>{c.value(line)}</td>
+                  ))}
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row">Team</th>
+              {COLUMNS.map((c) => (
+                <td key={c.abbr}>{c.value(team)}</td>
+              ))}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
   )
 }
 

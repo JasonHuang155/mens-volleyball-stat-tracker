@@ -80,7 +80,7 @@ function PlayerForm({ label, submitLabel, initial, onSubmit, onCancel, onDelete 
           />
         </label>
         <label className="field field-grow">
-          Name
+          Name (optional)
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
       </div>

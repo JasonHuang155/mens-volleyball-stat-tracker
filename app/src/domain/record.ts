@@ -1,14 +1,15 @@
 import { v4 as uuidv4 } from 'uuid'
+import { followUpProblem } from './plays.ts'
 import { replay, startingRotation } from './replay.ts'
-import type { EventBase, EventBody, FollowUpBody, Match, MatchEvent, MatchState } from './types.ts'
+import type { EventBase, EventBody, Match, MatchEvent, MatchState, StatBody } from './types.ts'
 import { activeEvents, lastActiveEvent } from './undo.ts'
 
 type MatchInfo = Pick<Match, 'id' | 'bestOf'>
-type Situation = Pick<EventBase, 'setNumber' | 'rallyNumber' | 'servingTeam' | 'rotation'>
+type Situation = Pick<EventBase, 'setNumber' | 'rallyNumber' | 'servingSide' | 'homeRotation' | 'awayRotation'>
 
 /**
  * Turns one tap into a saved event: adds an id, the next seq number, and the
- * game situation right now (set, rally, who's serving, rotation).
+ * game situation right now (set, rally, who's serving, both rotations).
  * Throws, without saving anything, if the tap breaks the rules.
  */
 export function recordAction(match: MatchInfo, events: MatchEvent[], body: EventBody): MatchEvent {
@@ -28,25 +29,18 @@ export function recordAction(match: MatchInfo, events: MatchEvent[], body: Event
 }
 
 /**
- * Adds a second player's credit to the play just recorded: the setter's assist
- * on a kill, or another blocker on a block assist. It joins that play's action
- * and rally, so the point isn't counted twice and Undo removes the whole play.
+ * Adds another player's credit to the play just recorded: the assist on a
+ * kill, the receiver on an ace, the blockers on a blocked attack, and so on
+ * (see plays.ts). It joins that play's action and rally, so the point isn't
+ * counted twice and Undo removes the whole play.
  */
-export function recordFollowUp(match: MatchInfo, events: MatchEvent[], body: FollowUpBody): MatchEvent {
+export function recordFollowUp(match: MatchInfo, events: MatchEvent[], body: StatBody): MatchEvent {
   const last = lastActiveEvent(events)
   if (!last) throw new Error('there is no play to add to')
 
   const play = activeEvents(events).filter((e) => e.actionId === last.actionId)
-  const first = play[0]
-  if (body.type === 'assist') {
-    if (!(first.type === 'attack' && first.result === 'kill')) throw new Error('an assist can only be added to a kill')
-    if (play.some((e) => e.type === 'assist')) throw new Error('this kill already has an assist')
-  } else if (!(first.type === 'block' && first.result === 'assist')) {
-    throw new Error('a block assist can only be added to another block assist')
-  }
-  if (play.some((e) => 'playerId' in e && e.playerId === body.playerId)) {
-    throw new Error('that player is already part of this play')
-  }
+  const problem = followUpProblem(play, body)
+  if (problem) throw new Error(problem)
 
   const event: MatchEvent = {
     ...body,
@@ -57,8 +51,9 @@ export function recordFollowUp(match: MatchInfo, events: MatchEvent[], body: Fol
     createdAt: new Date().toISOString(),
     setNumber: last.setNumber,
     rallyNumber: last.rallyNumber,
-    servingTeam: last.servingTeam,
-    rotation: last.rotation,
+    servingSide: last.servingSide,
+    homeRotation: last.homeRotation,
+    awayRotation: last.awayRotation,
   }
 
   replay(match, [...events, event]) // throws if this event breaks the rules
@@ -83,14 +78,16 @@ function situation(state: MatchState, body: EventBody): Situation {
     return {
       setNumber: state.setNumber + 1,
       rallyNumber: 1,
-      servingTeam: body.detail.firstServe,
-      rotation: startingRotation(body.detail),
+      servingSide: body.detail.firstServe,
+      homeRotation: startingRotation(body.detail.home),
+      awayRotation: startingRotation(body.detail.away),
     }
   }
   return {
     setNumber: state.setNumber,
     rallyNumber: state.rallyNumber,
-    servingTeam: state.servingTeam,
-    rotation: state.rotation,
+    servingSide: state.servingSide,
+    homeRotation: state.courts.home.rotation,
+    awayRotation: state.courts.away.rotation,
   }
 }

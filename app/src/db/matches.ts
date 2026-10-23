@@ -1,19 +1,21 @@
 import { v4 as uuidv4 } from 'uuid'
 import { recordAction, recordFollowUp, recordUndo } from '../domain/record.ts'
-import type { BestOf, EventBody, FollowUpBody, Match, MatchEvent } from '../domain/types.ts'
+import type { BestOf, EventBody, Match, MatchEvent, Player, Side, StatBody, Team } from '../domain/types.ts'
 import type { StatsDatabase } from './database.ts'
+import { listPlayers } from './roster.ts'
 
-export type MatchInput = { teamId: string; opponentName: string; bestOf: BestOf }
+export type MatchInput = { homeTeamId: string; awayTeamId: string; bestOf: BestOf }
 
 export async function createMatch(db: StatsDatabase, input: MatchInput): Promise<Match> {
-  const opponentName = input.opponentName.trim()
-  if (!opponentName) throw new Error('Enter the opponent’s name')
-  if (!(await db.teams.get(input.teamId))) throw new Error('Pick a team first')
+  if (!input.homeTeamId || !input.awayTeamId) throw new Error('Pick both teams')
+  if (input.homeTeamId === input.awayTeamId) throw new Error('Pick two different teams')
+  const [home, away] = await Promise.all([db.teams.get(input.homeTeamId), db.teams.get(input.awayTeamId)])
+  if (!home || !away) throw new Error('Pick both teams')
 
   const match: Match = {
     id: uuidv4(),
-    teamId: input.teamId,
-    opponentName,
+    homeTeamId: input.homeTeamId,
+    awayTeamId: input.awayTeamId,
     bestOf: input.bestOf,
     createdAt: new Date().toISOString(),
   }
@@ -23,6 +25,35 @@ export async function createMatch(db: StatsDatabase, input: MatchInput): Promise
 
 export async function getMatch(db: StatsDatabase, matchId: string): Promise<Match | undefined> {
   return db.matches.get(matchId)
+}
+
+/** Everything a match screen needs: the match, both teams and rosters, and every saved tap. */
+export type MatchData = {
+  match: Match
+  teams: Record<Side, Team>
+  rosters: Record<Side, Player[]>
+  events: MatchEvent[]
+}
+
+export async function getMatchData(db: StatsDatabase, matchId: string): Promise<MatchData | null> {
+  const match = await db.matches.get(matchId)
+  if (!match) return null
+  const [home, away, homeRoster, awayRoster, events] = await Promise.all([
+    db.teams.get(match.homeTeamId),
+    db.teams.get(match.awayTeamId),
+    listPlayers(db, match.homeTeamId),
+    listPlayers(db, match.awayTeamId),
+    getEvents(db, matchId),
+  ])
+  return {
+    match,
+    teams: {
+      home: home ?? { id: match.homeTeamId, name: 'Home' },
+      away: away ?? { id: match.awayTeamId, name: 'Away' },
+    },
+    rosters: { home: homeRoster, away: awayRoster },
+    events,
+  }
 }
 
 /** All matches, newest first. */
@@ -48,8 +79,8 @@ export async function recordTap(db: StatsDatabase, match: Match, body: EventBody
   })
 }
 
-/** Saves an assist or extra blocker as part of the play just recorded. */
-export async function recordFollowUpTap(db: StatsDatabase, match: Match, body: FollowUpBody): Promise<MatchEvent> {
+/** Saves another player's part in the play just recorded (an assist, the aced receiver, a blocker...). */
+export async function recordFollowUpTap(db: StatsDatabase, match: Match, body: StatBody): Promise<MatchEvent> {
   return db.transaction('rw', db.events, async () => {
     const event = recordFollowUp(match, await getEvents(db, match.id), body)
     await db.events.add(event)

@@ -68,7 +68,9 @@ export function points(kills: number, aces: number, blockSolos: number, blockAss
 export function setsPlayed(events: MatchEvent[], playerId: string): number {
   const sets = new Set<number>() // a Set ignores duplicates, so each set number is kept once
   for (const event of events) {
-    const started = event.type === 'set_start' && event.detail.lineup.includes(playerId)
+    const started =
+      event.type === 'set_start' &&
+      (event.detail.home.players.includes(playerId) || event.detail.away.players.includes(playerId))
     const cameIn = event.type === 'substitution' && event.playerId === playerId
     if (started || cameIn) sets.add(event.setNumber)
   }

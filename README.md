@@ -1,6 +1,6 @@
 # Men's Volleyball Stat Tracker
 
-A courtside stat tracker for men's volleyball, built to show both software engineering and data engineering:
+A courtside stat tracker for men's volleyball that records both teams, the way an NCAA stat crew does. It's built to show both software engineering and data engineering:
 
 - **Phase 1 (in progress):** a phone app for entering stats during a match
 - **Phase 2:** a backend with offline sync, accounts, and a live box score link
@@ -9,129 +9,60 @@ A courtside stat tracker for men's volleyball, built to show both software engin
 
 ## How it works
 
-Every tap courtside is saved as an **event**: who did what, in which set and rally. The app never stores stats like "#11 has 5 kills". It stores the list of taps and counts through it whenever it needs the score, the rotation, or a box score. Undo doesn't erase a tap; it adds a new event that says "ignore that one". The list only ever grows.
+Every tap courtside is saved as an **event**: who did what, for which team, in which set and rally. The app never stores stats like "#11 has 5 kills". It stores the list of taps and counts through it whenever it needs the score, the rotations, or a box score. Undo doesn't erase a tap; it adds a new event that says "ignore that one". The list only ever grows.
 
 This makes undo safe, means stats can't drift out of sync with what happened, and keeps later phases simple: syncing to a server or loading a warehouse just means copying events that haven't been copied yet.
 
+Both teams are tracked: each has a roster, a lineup, a rotation, a libero, and subs, and every player tap says which team (`home` or `away`) it belongs to. NCAA play-by-play also covers both teams, so Phase 4 data fits the same shape.
+
 ## Volleyball rules the app follows
 
-Who gets the point (code: `app/src/domain/rules.ts`):
+### Who gets the point (`app/src/domain/rules.ts`)
 
-| Point for us | Point for them | Rally continues |
+From the point of view of the player's own team:
+
+| Their team wins the point | The other team wins the point | Rally continues |
 |---|---|---|
 | serve ace | serve error | serve in |
 | kill | attack error (including getting blocked) | attack in play |
 | block solo, block assist | block error | dig, assist |
-| their error | pass 0 (we got aced) | pass 1–3 |
+| "point, no stat" (a penalty or a missed rally) | pass 0 (they got aced) | pass 1–3 |
 | | ball handling error | |
-| | their point | |
 
 Sets go to 25, win by 2. The deciding set (set 3 of a best of 3, set 5 of a best of 5) goes to 15, win by 2. There's no cap, so 33–31 is a legal score.
 
-Serving and rotation (code: `app/src/domain/replay.ts`):
+### Serving and rotation (`app/src/domain/replay.ts`)
 
 - Court positions are numbered 1–6: 1 is right back (the server), 2–4 are the front row, 5 and 6 are the back row.
-- If the serving team wins the rally, the same player serves again. If the receiving team wins (a **sideout**), it serves next.
-- When we side out, we rotate clockwise: position 2 moves to 1 and serves, and position 1 moves to 6.
-- Rotations are named the way coaches name them, by where the setter is: rotation 1 means the setter is in position 1. Each rotation moves the setter back one spot, so a set goes rotation 1, 6, 5, 4, 3, 2, 1. We don't track the opponent's rotation.
+- If the serving team wins the rally, the same player serves again. If the receiving team wins (a **sideout**), it serves next and rotates clockwise: position 2 moves to 1 and serves, and position 1 moves to 6.
+- Rotations are named the way coaches name them, by where the setter is: rotation 1 means the setter is in position 1. Each rotation moves the setter back one spot, so a set goes rotation 1, 6, 5, 4, 3, 2, 1. Each team has its own rotation.
+- Only the serving team's player in position 1 can serve. Pass ratings (0–3) are serve-receive stats, the same as NCAA "receptions", so they're only accepted for the receiving team.
 
-Substitutions and the libero:
+### Substitutions and the libero
 
 - A substitute takes the same spot in the rotation as the player they replace.
-- The libero starts each set on the bench and can only come in for a back-row player. Only the player they replaced can come back in for them.
+- Each team's libero starts each set on the bench and can only come in for a back-row player. Only the player they replaced can come back in for them.
 - The libero can't play in the front row. When they would rotate into position 4, the app brings the player they replaced back in automatically.
 - Phase 1 doesn't enforce substitution limits or libero serving rules.
 
-Plays with two players, and Undo (code: `app/src/domain/record.ts`, `undo.ts`):
+### Plays that involve more than one player (`app/src/domain/plays.ts`)
 
-- Some plays credit more than one player: the setter's assist on a kill, or two or three blockers on a block assist. The extra players are added as **follow-up** events that join the same play, so the play still scores one point.
-- Undo cancels the whole last play (a kill and its assist together). Pressing it again goes back one more play. Only the last play can be undone, because changing an older point would change who served and the rotation for everything after it.
+Many plays credit several players, often on both teams, like on an NCAA stat sheet. The first tap scores the point; the others are **follow-ups** that join the same play (the same `actionId`), so the play still scores once and Undo removes it as a whole.
 
-## Code tour (`app/src/domain/`)
+| First tap | The app asks | Follow-up recorded |
+|---|---|---|
+| Kill | "Assist by?" | assist for a teammate |
+| Ace | "Who was aced?" (or "Untouched") | reception error (pass 0) for the receiver |
+| Pass 0 | nothing: the server is known | ace for the server, added automatically |
+| Attack error | "Blocked by?" (or "Not blocked") | one blocker = block solo; two or three = a block assist each |
+| Block solo | "Whose attack?" | attack error for the hitter |
+| Block assist | "Who else blocked?", then "Whose attack?" | block assists, then the attack error |
 
-This folder is the volleyball logic, with no screens or database, so it's easy to test.
+The rules check that follow-ups make sense (an assist only on a kill, a reception error only by the other team, at most three blockers, no mixing a solo block with block assists), and that one play never gives the point to both teams.
 
-| File | What it does |
-|---|---|
-| `types.ts` | What every event and the match state look like |
-| `rules.ts` | Who gets the point; set and match win rules |
-| `replay.ts` | `replay()`: plays back the events to rebuild score, server, rotation, and lineup |
-| `record.ts` | `recordAction()`, `recordFollowUp()`, `recordUndo()`: turn a tap into a saved event, after checking it with `replay()` |
-| `undo.ts` | `activeEvents()`: the events that still count after undos |
+### Undo
 
-| `boxScore.ts` | Per-player stats counted from the events, matching the NCAA box score columns. Written test-first: the tests in `boxScore.test.ts` came before the code |
-
-## Storage (`app/src/db/`)
-
-Everything is saved on the phone in IndexedDB, the database built into every browser, using the Dexie library. It works offline and survives refreshes.
-
-| Table | Holds |
-|---|---|
-| `teams` | team name |
-| `players` | roster: name, jersey number, position |
-| `matches` | opponent, best of 3 or 5, when it was created |
-| `events` | every tap: the list the volleyball logic replays |
-
-| File | What it does |
-|---|---|
-| `database.ts` | Table definitions |
-| `roster.ts` | Teams and players. Jersey numbers must be unique per team, and a player who has played in a match can't be deleted |
-| `matches.ts` | Matches, plus `recordTap()`, `recordFollowUpTap()`, `undoLastTap()`: check a tap with the volleyball logic, then save it |
-
-Each tap is checked and saved inside one database transaction. Transactions on the same table run one at a time, so two fast taps can't get the same `seq` number. Tests use `fake-indexeddb`, a pretend IndexedDB that runs in Node (`app/src/test/setup.ts`).
-
-## Screens (`app/src/screens/`)
-
-| Address | Screen |
-|---|---|
-| `/` | Home: create your team, start a new match, open the roster, and see every match with where it stands ("Set 2 · 12–10", "Won 3–1") |
-| `/teams/:teamId` | Roster: add players (number, name, position), tap a player to edit or delete them |
-| `/teams/:teamId/new-match` | New match: opponent and best of 3 or 5 |
-| `/matches/:matchId` | The match: scoreboard, then the lineup form before each set, or the courtside tap screen during a set |
-| `/matches/:matchId/box-score` | Box score: every player who got on the court, in NCAA columns, with a team row. Switch between the whole match and one set |
-
-The courtside tap screen (`LiveEntry.tsx`):
-- Every stat is two taps: the player (laid out like the court), then what they did. A "Last:" line confirms what was saved.
-- Only buttons that make sense right now are shown: serve buttons only for our server, pass ratings only on their serve, block buttons only for front-row players.
-- Serve type (jump spin, jump float, standing float) defaults to the type that player served last.
-- Attacks are marked front or back row from where the player is standing.
-- After a kill it asks "Assist by?" (setters first). After a block assist it asks "Who else blocked?", then "Anyone else?" for a triple block. Ignoring the question is fine: the next tap closes it, and it still appears after the kill that ends a set.
-- "Their point" and "Their error" for team-only points, plus Undo and Subs (regular subs, and one-tap libero in/out).
-- During a set the screen is compacted so a whole panel of buttons fits on a phone without scrolling: the heading is hidden (the scoreboard shows both names) and the group labels sit beside the buttons.
-- Passes (rated 0–3) are serve-receive stats, the same as NCAA "receptions", so the app only accepts them on the other team's serve.
-
-The box score (`BoxScoreScreen.tsx`):
-- Columns in NCAA order (S, K, E, TA, PCT, A, SA, SE, reception attempts and errors, DIG, BS, BA, BE, BHE, PTS), plus pass average and total blocks. Tap "What the columns mean" for the full names.
-- Hitting % is written the NCAA way (".333", "-.100"). Players with no attempts get "—", not .000.
-- The team row adds up the counts but works hitting % and pass average out again from the totals. Averaging the players would be wrong: a 1-for-1 player would count as much as a 10-for-20 player.
-- On a phone the table scrolls sideways while the player column stays put.
-- It updates live as taps are saved.
-
-The lineup form, shown before every set:
-- Six spots laid out like the court (net at the top: 4, 3, 2 in front, 5, 6, 1 behind). A player can only be picked for one spot.
-- The setter and libero are guessed from roster positions (S and L) and can be changed. It shows which rotation that lineup starts in.
-- From set 2 on, it starts with the previous set's lineup, and the other team serves first (teams alternate serving first each set). Check the first serve for the deciding set, which is decided by a coin toss.
-- A wrong lineup can be fixed with Undo after the set starts.
-
-When a tap breaks a rule, the screen shows the plain reason ("No set is in progress"). The volleyball logic throws a `RuleError` that carries both that reason and the event details for debugging.
-
-Screens read from the database with `useLiveQuery` (from `dexie-react-hooks`), which re-reads whenever the data changes, so what's on screen always matches what's saved. Screen tests (`*.test.tsx`) use React Testing Library: they render the app in a pretend browser (jsdom), then type and tap the way a person would. `app/src/test/renderApp.tsx` sets that up.
-
-Phone-friendly details:
-- Everything you tap is at least 56px tall, and text boxes use 16px+ text so iPhones don't zoom in when you tap one.
-- Double-tap zoom is turned off (`touch-action: manipulation`), so fast taps don't zoom the page. Pinch-to-zoom still works.
-- The jersey number box brings up the number keypad. After adding a player, the form clears and jumps back to it, ready for the next player.
-- Deleting a player takes two taps ("Delete", then "Tap again to delete"), so a stray tap can't remove anyone.
-
-`app/src/test/matchScript.ts` is a test helper that plays out a match tap by tap, e.g. `new MatchScript().startSet().point('us', 3)`.
-
-## Repository layout
-
-```
-app/        Phase 1: React + TypeScript stat entry app (Vite)
-api/        Phase 2: FastAPI backend (not started)
-pipeline/   Phase 3: DuckDB + dbt + Dagster (not started)
-```
+Undo cancels the whole last play. Pressing it again goes back one more play. Only the last play can be undone, because changing an older point would change who served and the rotations for everything after it.
 
 ## Setup
 
@@ -158,15 +89,91 @@ Other commands, run from `app/`:
 1. Put the phone on the same Wi-Fi as the computer.
 2. From `app/`, run `npm run dev:phone`. It prints a `Network:` address like `http://10.0.0.29:5173`.
 3. The first time, Windows Firewall asks whether Node.js may use the network. Allow it. If Windows has your home Wi-Fi marked as a Public network, either tick "Public networks" in that prompt, or change the network to Private (Settings → Network & internet → Wi-Fi → your network → Network profile type), which is the usual setting for a home network.
-4. Open the `Network:` address in the phone's browser.
+4. Open the `Network:` address in the phone's browser. The first load over Wi-Fi can take a few seconds.
 
 Things to know:
 - Campus and public Wi-Fi often block devices from reaching each other. If the phone can't load the page, turn on the phone's hotspot and connect the computer to it.
+- If something goes wrong, the page says so instead of staying blank: "Loading…" while starting, "The app couldn't start" with the reason if a script fails, a message for browsers too old to run it, and "Something went wrong" with the error if a screen crashes.
 - Data saved on the phone stays on the phone, separate from the computer's browser. It's also tied to that exact address. If the computer's address changes (a different network), the phone opens a fresh, empty app; the old data is still there under the old address. Phase 2 puts the app at one permanent web address and syncs data to a server.
+
+## Repository layout
+
+```
+app/        Phase 1: React + TypeScript stat entry app (Vite)
+api/        Phase 2: FastAPI backend (not started)
+pipeline/   Phase 3: DuckDB + dbt + Dagster (not started)
+```
+
+## Code tour
+
+### Volleyball logic (`app/src/domain/`)
+
+No screens or database here, so it's easy to test.
+
+| File | What it does |
+|---|---|
+| `types.ts` | What every event and the match state look like |
+| `rules.ts` | Who gets the point; set and match win rules |
+| `replay.ts` | `replay()`: plays back the events to rebuild the score, server, and both teams' courts |
+| `plays.ts` | Which follow-ups fit a play, and the questions to ask after it |
+| `record.ts` | `recordAction()`, `recordFollowUp()`, `recordUndo()`: turn a tap into a saved event, after checking it with `replay()` |
+| `undo.ts` | `activeEvents()`: the events that still count after undos |
+| `boxScore.ts` | Per-player stats in NCAA box score columns, and the team row. Written test-first: the tests came before the code |
+
+### Storage (`app/src/db/`)
+
+Everything is saved on the phone in IndexedDB, the database built into every browser, using the Dexie library. It works offline and survives refreshes.
+
+| Table | Holds |
+|---|---|
+| `teams` | team name (your team and the teams you play) |
+| `players` | roster: jersey number, position, and an optional name |
+| `matches` | home team, away team, best of 3 or 5, when it was created |
+| `events` | every tap: the list the volleyball logic replays |
+
+| File | What it does |
+|---|---|
+| `database.ts` | Table definitions. Version 2 added home/away teams; upgrading clears matches saved by the one-team version 1 (teams and players are kept) |
+| `roster.ts` | Teams and players. Jersey numbers must be unique per team, and a player who has played in a match can't be deleted |
+| `matches.ts` | Matches, plus `recordTap()`, `recordFollowUpTap()`, `undoLastTap()`: check a tap with the volleyball logic, then save it |
+
+Each tap is checked and saved inside one database transaction. Transactions on the same table run one at a time, so two fast taps can't get the same `seq` number.
+
+### Screens (`app/src/screens/`)
+
+| Address | Screen |
+|---|---|
+| `/` | Home: your teams, a New match button, and every match with where it stands ("Rivals at Huskies · Set 2 · 10–12") |
+| `/teams/:teamId` | Roster: add players (number, position, optional name), tap a player to edit or delete them |
+| `/new-match` | New match: away team, home team, best of 3 or 5 |
+| `/matches/:matchId` | The match: scoreboard, then both lineups before each set, or the courtside tap screen during a set |
+| `/matches/:matchId/box-score` | Box score: a table per team in NCAA columns, with team rows. Whole match or one set |
+
+**The lineup form**, shown before every set: each team's six spots are laid out like the court, and a player can only be picked once. Setters and liberos are guessed from roster positions (S and L). From set 2 on, it starts from the previous set's lineups, with the other team serving first. Check the first serve for the deciding set, which is decided by a coin toss.
+
+**The courtside tap screen** (`LiveEntry.tsx`):
+- Both teams on one court picture, seen from behind the home baseline: away (orange) across the net, home (blue) on the near side. Every stat is two taps: the player, then what they did. A "Last:" line confirms what was saved.
+- Only buttons that make sense right now appear: serve buttons only for the server, pass ratings only for the receiving team, block buttons only for front-row players.
+- Each player's serve type (jump spin, jump float, standing float) defaults to the type they served last. Attacks are marked front or back row from where the player is standing.
+- After plays that involve other players, the question ("Blocked by?") appears in the button area, so the court doesn't move. It offers the players who were on court when the play happened, even if a sideout has rotated them since. Skipping is fine, and it still appears after the point that ends a set.
+- "+1" buttons give a team a point with no stat. Undo and Subs (pick a team; one-tap libero in/out, or a regular sub) are always there.
+- It's compacted to fit a phone screen without scrolling: the rotations sit in the scoreboard, and the net line names the teams.
+
+**The box score** (`BoxScoreScreen.tsx`): columns in NCAA order (S, K, E, TA, PCT, A, SA, SE, reception attempts and errors, DIG, BS, BA, BE, BHE, PTS), plus pass average and total blocks. Hitting % is written the NCAA way (".333", "-.100", and "—" with no attempts). The team row adds up the counts but works hitting % and pass average out again from the totals; averaging players would count a 1-for-1 player as much as a 10-for-20 one. On a phone the table scrolls sideways while the player column stays put.
+
+When a tap breaks a rule, the screen shows the plain reason ("No set is in progress"): the volleyball logic throws a `RuleError` carrying that reason plus the event details for debugging.
+
+Phone-friendly details: tap targets are at least 52px tall on the tap screen and 56px elsewhere; text boxes use 16px+ text so iPhones don't zoom in; double-tap zoom is off (`touch-action: manipulation`); the jersey number box brings up the number keypad; deleting a player takes two taps.
+
+### Tests
+
+- Logic and storage tests run in Node. `app/src/test/matchScript.ts` plays a match tap by tap, e.g. `new MatchScript().startSet().point('home', 3)`.
+- Storage tests use `fake-indexeddb`, a pretend IndexedDB (`app/src/test/setup.ts`).
+- Screen tests (`*.test.tsx`) use React Testing Library in a pretend browser (jsdom): they type and tap the way a person would. `app/src/test/renderApp.tsx` and `fixtures.ts` set up the app and two teams.
 
 ## Stats tracked
 
-The box score matches the official NCAA box score: sets played, kills, attack errors, total attacks, hitting %, assists, service aces, service errors, reception attempts and errors, digs, block solos, block assists, block errors, ball handling errors, and points.
+For both teams, the box score matches the official NCAA box score: sets played, kills, attack errors, total attacks, hitting %, assists, service aces, service errors, reception attempts and errors, digs, block solos, block assists, block errors, ball handling errors, and points.
 
 It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve type (jump spin, jump float, standing float), and front/back row attacks.
 
@@ -175,19 +182,21 @@ It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve ty
 | Decision | Why |
 |---|---|
 | Save taps (events), compute stats | Undo is safe, stats can't drift, and sync/warehouse loading become "copy new rows" |
+| Track both teams, as home and away | That's how NCAA stat crews work, it gives a full box score for each team, and it matches NCAA play-by-play for Phase 4 |
+| Linked plays (an ace is also a reception error, a block is also an attack error) | The same pairs an NCAA stat sheet records, so both teams' numbers stay consistent |
+| Opponent player names are optional | Stat crews often only know the other team's jersey numbers |
 | Undo adds an event instead of deleting | The event list only grows, so syncing it in Phase 2 never has to handle deletions |
 | Each event has a `seq` number | Phone clocks can give two taps the same timestamp; `seq` gives an exact order |
-| Each event has an `actionId` | Groups the events from one play, so a kill and its assist score once and undo together |
-| Events record the serving team and rotation at the time of the tap | The app could recompute them, but SQL in Phase 3 would have to replay the whole match. Stamping them makes "sideout % by rotation" a simple GROUP BY, and gives the Phase 3 data tests something to check |
+| Each event has an `actionId` | Groups the events from one play, so a linked play scores once and undoes together |
+| Events record the serving team and both rotations at the time of the tap | The app could recompute them, but SQL in Phase 3 would have to replay the whole match. Stamping them makes "sideout % by rotation" a simple GROUP BY, and gives the Phase 3 data tests something to check |
 | `replay()` throws on impossible taps, and recording checks every tap with it | One place defines the rules. A tap that breaks them is never saved |
 | Rotations named by the setter's position | The convention coaches use, so rotation 3 means the same thing in every set |
 | Dexie for IndexedDB | IndexedDB's own interface is clunky; Dexie makes it a few readable lines and can refresh the screen when data changes |
 | React Router for screens | Each screen gets its own web address, which Phase 2's shareable live box score link needs |
-| The Phase 1 screens manage one team | It's what one stat keeper needs. The database already supports several teams, ready for Phase 2 accounts |
 | Players can't be deleted once they've played | Their events would point at nobody, breaking box scores and Phase 3 season stats |
+| Errors are shown on the page | Phones have no developer console, so a blank page would give no clue what went wrong |
 | `uuid` library for ids | The browser's built-in `crypto.randomUUID()` only works on https or localhost, and testing on a phone over Wi-Fi is neither |
 | React + TypeScript + Vite | Industry-standard frontend stack; TypeScript catches mistakes like a misspelled stat name before the app runs |
 | Vitest for tests | Built for Vite, so tests use the same setup as the app |
-| npm | Comes with Node, nothing extra to install |
 | TypeScript `strict` mode on | Catches missing values (like a player with no number) at compile time |
 | Line endings normalized to LF | Windows and Linux (CI in Phase 2) see identical files |

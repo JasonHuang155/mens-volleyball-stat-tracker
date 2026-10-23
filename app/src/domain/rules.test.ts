@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isDecidingSet,
   matchWinner,
+  otherSide,
   pointsToWinSet,
   pointWinner,
   setsNeededToWin,
@@ -10,30 +11,46 @@ import {
 import type { EventBody, Side } from './types.ts'
 
 describe('pointWinner', () => {
+  const side = 'home' as const
   const p = 'p1'
+  // All for a home player: "home" means the home team wins the point.
   const cases: [string, EventBody, Side | null][] = [
-    ['serve ace', { type: 'serve', playerId: p, result: 'ace', detail: { serveType: 'jump_spin' } }, 'us'],
-    ['serve error', { type: 'serve', playerId: p, result: 'error', detail: { serveType: 'jump_float' } }, 'them'],
-    ['serve in', { type: 'serve', playerId: p, result: 'in', detail: { serveType: 'standing_float' } }, null],
-    ['pass 0 (aced)', { type: 'pass', playerId: p, result: 0 }, 'them'],
-    ['pass 1', { type: 'pass', playerId: p, result: 1 }, null],
-    ['pass 3', { type: 'pass', playerId: p, result: 3 }, null],
-    ['kill', { type: 'attack', playerId: p, result: 'kill', detail: { row: 'front' } }, 'us'],
-    ['attack error', { type: 'attack', playerId: p, result: 'error', detail: { row: 'back' } }, 'them'],
-    ['attack in play', { type: 'attack', playerId: p, result: 'in_play', detail: { row: 'front' } }, null],
-    ['block solo', { type: 'block', playerId: p, result: 'solo' }, 'us'],
-    ['block assist', { type: 'block', playerId: p, result: 'assist' }, 'us'],
-    ['block error', { type: 'block', playerId: p, result: 'error' }, 'them'],
-    ['dig', { type: 'dig', playerId: p }, null],
-    ['assist', { type: 'assist', playerId: p }, null],
-    ['ball handling error', { type: 'ball_handling_error', playerId: p }, 'them'],
-    ['their point', { type: 'their_point' }, 'them'],
-    ['their error', { type: 'their_error' }, 'us'],
+    ['serve ace', { type: 'serve', side, playerId: p, result: 'ace', detail: { serveType: 'jump_spin' } }, 'home'],
+    ['serve error', { type: 'serve', side, playerId: p, result: 'error', detail: { serveType: 'jump_float' } }, 'away'],
+    ['serve in', { type: 'serve', side, playerId: p, result: 'in', detail: { serveType: 'standing_float' } }, null],
+    ['pass 0 (aced)', { type: 'pass', side, playerId: p, result: 0 }, 'away'],
+    ['pass 1', { type: 'pass', side, playerId: p, result: 1 }, null],
+    ['pass 3', { type: 'pass', side, playerId: p, result: 3 }, null],
+    ['kill', { type: 'attack', side, playerId: p, result: 'kill', detail: { row: 'front' } }, 'home'],
+    ['attack error', { type: 'attack', side, playerId: p, result: 'error', detail: { row: 'back' } }, 'away'],
+    ['attack in play', { type: 'attack', side, playerId: p, result: 'in_play', detail: { row: 'front' } }, null],
+    ['block solo', { type: 'block', side, playerId: p, result: 'solo' }, 'home'],
+    ['block assist', { type: 'block', side, playerId: p, result: 'assist' }, 'home'],
+    ['block error', { type: 'block', side, playerId: p, result: 'error' }, 'away'],
+    ['dig', { type: 'dig', side, playerId: p }, null],
+    ['assist', { type: 'assist', side, playerId: p }, null],
+    ['ball handling error', { type: 'ball_handling_error', side, playerId: p }, 'away'],
+    ['point, no stat', { type: 'point', side }, 'home'],
     ['undo', { type: 'undo', detail: { voidsActionId: 'a1' } }, null],
   ]
 
   it.each(cases)('%s', (_label, body, expected) => {
     expect(pointWinner(body)).toBe(expected)
+  })
+
+  it('works the same way for the away team', () => {
+    expect(pointWinner({ type: 'attack', side: 'away', playerId: 'a4', result: 'kill', detail: { row: 'front' } })).toBe(
+      'away',
+    )
+    expect(pointWinner({ type: 'pass', side: 'away', playerId: 'a5', result: 0 })).toBe('home')
+    expect(pointWinner({ type: 'point', side: 'away' })).toBe('away')
+  })
+})
+
+describe('otherSide', () => {
+  it('swaps home and away', () => {
+    expect(otherSide('home')).toBe('away')
+    expect(otherSide('away')).toBe('home')
   })
 })
 
@@ -56,28 +73,28 @@ describe('deciding set', () => {
 
 describe('setWinner', () => {
   const cases: [number, number, number, Side | null][] = [
-    // [us, them, setNumber, expected] in a best of 5
-    [25, 23, 1, 'us'],
-    [23, 25, 1, 'them'],
-    [25, 0, 1, 'us'],
+    // [home, away, setNumber, expected] in a best of 5
+    [25, 23, 1, 'home'],
+    [23, 25, 1, 'away'],
+    [25, 0, 1, 'home'],
     [25, 24, 1, null], // must win by 2
     [24, 24, 1, null],
-    [26, 24, 1, 'us'],
-    [31, 33, 1, 'them'], // no cap on extra points
+    [26, 24, 1, 'home'],
+    [31, 33, 1, 'away'], // no cap on extra points
     [24, 22, 1, null], // haven't reached 25
-    [15, 13, 5, 'us'], // deciding set goes to 15
+    [15, 13, 5, 'home'], // deciding set goes to 15
     [14, 12, 5, null],
     [15, 14, 5, null],
-    [17, 15, 5, 'us'],
+    [17, 15, 5, 'home'],
     [15, 13, 4, null], // set 4 still goes to 25
   ]
 
-  it.each(cases)('%i-%i in set %i → %s', (us, them, setNumber, expected) => {
-    expect(setWinner(us, them, setNumber, 5)).toBe(expected)
+  it.each(cases)('%i-%i in set %i → %s', (home, away, setNumber, expected) => {
+    expect(setWinner(home, away, setNumber, 5)).toBe(expected)
   })
 
   it('uses 15 for set 3 of a best of 3', () => {
-    expect(setWinner(15, 10, 3, 3)).toBe('us')
+    expect(setWinner(15, 10, 3, 3)).toBe('home')
     expect(setWinner(15, 10, 2, 3)).toBe(null)
   })
 })
@@ -89,13 +106,13 @@ describe('matchWinner', () => {
   })
 
   it('finds the winner once a team has enough sets', () => {
-    expect(matchWinner({ us: 3, them: 1 }, 5)).toBe('us')
-    expect(matchWinner({ us: 0, them: 2 }, 3)).toBe('them')
+    expect(matchWinner({ home: 3, away: 1 }, 5)).toBe('home')
+    expect(matchWinner({ home: 0, away: 2 }, 3)).toBe('away')
   })
 
   it('returns null while the match is still going', () => {
-    expect(matchWinner({ us: 2, them: 2 }, 5)).toBe(null)
-    expect(matchWinner({ us: 1, them: 1 }, 3)).toBe(null)
-    expect(matchWinner({ us: 2, them: 0 }, 5)).toBe(null)
+    expect(matchWinner({ home: 2, away: 2 }, 5)).toBe(null)
+    expect(matchWinner({ home: 1, away: 1 }, 3)).toBe(null)
+    expect(matchWinner({ home: 2, away: 0 }, 5)).toBe(null)
   })
 })

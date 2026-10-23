@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router'
 import PlayerForm from '../components/PlayerForm.tsx'
 import { playerCount } from '../components/playerCount.ts'
 import { db } from '../db/database.ts'
-import { addPlayer, deletePlayer, listPlayers, updatePlayer } from '../db/roster.ts'
+import { addPlayer, deletePlayer, listPlayers, playerLabel, updatePlayer } from '../db/roster.ts'
 
 function RosterScreen() {
   const { teamId = '' } = useParams() // the :teamId part of the address
@@ -52,7 +52,7 @@ function RosterScreen() {
             player.id === editingId ? (
               <li key={player.id} className="card">
                 <PlayerForm
-                  label={`Edit #${player.number} ${player.name}`}
+                  label={`Edit ${playerLabel(player)}`}
                   submitLabel="Save"
                   initial={player}
                   onSubmit={async (input) => {
