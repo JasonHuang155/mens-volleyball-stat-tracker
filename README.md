@@ -88,17 +88,7 @@ Each tap is checked and saved inside one database transaction. Transactions on t
 | `/teams/:teamId` | Roster: add players (number, name, position), tap a player to edit or delete them |
 | `/teams/:teamId/new-match` | New match: opponent and best of 3 or 5 |
 | `/matches/:matchId` | The match: scoreboard, then the lineup form before each set, or the courtside tap screen during a set |
-
 | `/matches/:matchId/box-score` | Box score: every player who got on the court, in NCAA columns, with a team row. Switch between the whole match and one set |
-
-The box score (`BoxScoreScreen.tsx`):
-- Columns in NCAA order (S, K, E, TA, PCT, A, SA, SE, reception attempts and errors, DIG, BS, BA, BE, BHE, PTS), plus pass average and total blocks. Tap "What the columns mean" for the full names.
-- Hitting % is written the NCAA way (".333", "-.100"). Players with no attempts get "—", not .000.
-- The team row adds up the counts but works hitting % and pass average out again from the totals. Averaging the players would be wrong: a 1-for-1 player would count as much as a 10-for-20 player.
-- On a phone the table scrolls sideways while the player column stays put.
-- It updates live as taps are saved.
-
-Passes (rated 0–3) are serve-receive stats, the same as NCAA "receptions", so the app only accepts them on the other team's serve.
 
 The courtside tap screen (`LiveEntry.tsx`):
 - Every stat is two taps: the player (laid out like the court), then what they did. A "Last:" line confirms what was saved.
@@ -108,6 +98,14 @@ The courtside tap screen (`LiveEntry.tsx`):
 - After a kill it asks "Assist by?" (setters first). After a block assist it asks "Who else blocked?", then "Anyone else?" for a triple block. Ignoring the question is fine: the next tap closes it, and it still appears after the kill that ends a set.
 - "Their point" and "Their error" for team-only points, plus Undo and Subs (regular subs, and one-tap libero in/out).
 - During a set the screen is compacted so a whole panel of buttons fits on a phone without scrolling: the heading is hidden (the scoreboard shows both names) and the group labels sit beside the buttons.
+- Passes (rated 0–3) are serve-receive stats, the same as NCAA "receptions", so the app only accepts them on the other team's serve.
+
+The box score (`BoxScoreScreen.tsx`):
+- Columns in NCAA order (S, K, E, TA, PCT, A, SA, SE, reception attempts and errors, DIG, BS, BA, BE, BHE, PTS), plus pass average and total blocks. Tap "What the columns mean" for the full names.
+- Hitting % is written the NCAA way (".333", "-.100"). Players with no attempts get "—", not .000.
+- The team row adds up the counts but works hitting % and pass average out again from the totals. Averaging the players would be wrong: a 1-for-1 player would count as much as a 10-for-20 player.
+- On a phone the table scrolls sideways while the player column stays put.
+- It updates live as taps are saved.
 
 The lineup form, shown before every set:
 - Six spots laid out like the court (net at the top: 4, 3, 2 in front, 5, 6, 1 behind). A player can only be picked for one spot.
@@ -154,9 +152,9 @@ Other commands, run from `app/`:
 | `npm run build` | type-check and build the production files into `app/dist/` |
 | `npm run lint` | check the code for common mistakes |
 
-## Stats tracked (Phase 1 goal)
+## Stats tracked
 
-The box score will match the official NCAA box score: sets played, kills, attack errors, total attacks, hitting %, assists, service aces, service errors, reception attempts and errors, digs, block solos, block assists, block errors, ball handling errors, and points.
+The box score matches the official NCAA box score: sets played, kills, attack errors, total attacks, hitting %, assists, service aces, service errors, reception attempts and errors, digs, block solos, block assists, block errors, ball handling errors, and points.
 
 It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve type (jump spin, jump float, standing float), and front/back row attacks.
 
