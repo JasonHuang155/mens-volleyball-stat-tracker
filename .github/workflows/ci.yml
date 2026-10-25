@@ -50,7 +50,7 @@ jobs:
       TEST_DATABASE_URL: postgresql+psycopg://volleyball:volleyball@localhost:5432/volleyball_test
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.2 # this action only publishes exact versions, not a "v10" label
         with:
           working-directory: api
           enable-cache: true
