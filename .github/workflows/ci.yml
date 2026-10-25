@@ -14,8 +14,8 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -24,3 +24,38 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build # also type-checks
+
+  api:
+    name: Server (lint, test, container build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    # A real Postgres for the tests, like `docker compose up -d db` on a laptop.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: volleyball
+          POSTGRES_PASSWORD: volleyball
+          POSTGRES_DB: volleyball_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U volleyball -d volleyball_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://volleyball:volleyball@localhost:5432/volleyball_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          working-directory: api
+          enable-cache: true
+      - run: uv sync --locked # installs exactly the versions in uv.lock (and Python itself)
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run pytest
+      - run: docker build -t volleyball-api . # makes sure the server's container still builds

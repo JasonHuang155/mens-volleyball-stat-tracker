@@ -1,0 +1,6 @@
+# Files Docker leaves out of the server's container.
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+tests

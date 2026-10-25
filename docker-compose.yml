@@ -1,0 +1,42 @@
+# Starts the server's pieces on your laptop.
+#   docker compose up -d db    just the database (for running the server or tests with uv)
+#   docker compose up --build  the database and the server together
+#   docker compose down        stop everything (your data is kept in the db-data volume)
+#
+# The username and password here are for your laptop only. The hosted server gets its
+# own database and password from the hosting service.
+#
+# On your laptop the database is at localhost:5433, not Postgres's usual 5432, so it
+# doesn't clash with a PostgreSQL installed directly on Windows. Inside Docker, the
+# server still reaches it at db:5432.
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: volleyball
+      POSTGRES_PASSWORD: volleyball
+      POSTGRES_DB: volleyball
+    ports:
+      - "5433:5432"
+    volumes:
+      - db-data:/var/lib/postgresql
+      - ./api/db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U volleyball -d volleyball"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  api:
+    build: ./api
+    environment:
+      DATABASE_URL: postgresql+psycopg://volleyball:volleyball@db:5432/volleyball
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:

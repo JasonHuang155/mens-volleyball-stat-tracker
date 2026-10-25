@@ -88,6 +88,28 @@ Other commands, run from `app/`:
 | `npm run build` | type-check and build the production files into `app/dist/` |
 | `npm run lint` | check the code for common mistakes |
 
+### The server (Phase 2, in progress)
+
+You also need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (it runs Postgres) and [uv](https://docs.astral.sh/uv/) (it installs the Python libraries). From the repository root:
+
+```bash
+docker compose up -d db        # start Postgres in Docker (at localhost:5433)
+cd api
+uv sync                        # install the Python libraries listed in uv.lock
+uv run pytest                  # run the server's tests (they use a separate volleyball_test database)
+uv run uvicorn app.main:app --reload   # run the server at http://localhost:8000 (docs at /docs)
+```
+
+Or run the database and the server together in Docker with `docker compose up --build`. `docker compose down` stops everything; your data stays in a Docker volume.
+
+The database is published on port **5433** instead of Postgres's usual 5432, so it doesn't clash with a PostgreSQL installed directly on Windows. Inside Docker, the server reaches it at `db:5432`.
+
+| Command (from `api/`) | What it does |
+|---|---|
+| `uv run pytest` | run the server tests |
+| `uv run ruff check` | check the Python code for common mistakes |
+| `uv run ruff format` | tidy the Python code's formatting |
+
 ### Try it on your phone
 
 1. Put the phone on the same Wi-Fi as the computer.
@@ -104,13 +126,18 @@ Things to know:
 
 ```
 app/                 Phase 1: React + TypeScript stat entry app (Vite)
-api/                 Phase 2: FastAPI backend (not started)
+api/                 Phase 2: FastAPI server
+  app/                 the server code (main.py, config.py, db.py)
+  tests/               pytest tests
+  db-init/             creates the test database the first time Postgres starts
+  Dockerfile           how to package the server as a container
 pipeline/            Phase 3: DuckDB + dbt + Dagster (not started)
+docker-compose.yml   starts Postgres (and the server) on your laptop
 .github/workflows/   Automatic checks and publishing on GitHub
 ```
 
 GitHub Actions run two workflows:
-- `ci.yml` runs lint, the type check, the tests, and a build on every push and pull request.
+- `ci.yml` checks the app (lint, type check, tests, build) and the server (lint, formatting, tests against a real Postgres, and a container build) on every push and pull request.
 - `pages.yml` publishes the app as a website on GitHub Pages whenever `main` changes. The site is served from `/<repository-name>/`, so the build gets that prefix (`BASE_PATH`), and a copy of the app is saved as `404.html` so opening a deeper address like `/matches/…` directly still loads the app.
 
 ## Code tour
@@ -211,6 +238,11 @@ It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve ty
 | Dexie for IndexedDB | IndexedDB's own interface is clunky; Dexie makes it a few readable lines and can refresh the screen when data changes |
 | React Router for screens | Each screen gets its own web address, which Phase 2's shareable live box score link needs |
 | Players can't be deleted once they've played | Their events would point at nobody, breaking box scores and Phase 3 season stats |
+| The server stores taps; the app computes stats | One copy of the volleyball logic (the app's TypeScript), so the server and app can never disagree. The live box score page runs the same code |
+| FastAPI + SQLAlchemy + Postgres | Widely used Python web stack. Postgres is a real database with the features Phase 3 needs |
+| uv for Python libraries | One fast tool for Python and its libraries, with a lock file so the laptop, CI, and the server run identical versions |
+| Docker Compose for local Postgres | One command starts a clean database; nothing to install or configure on Windows |
+| Tests use their own database | `volleyball_test` is separate, so running tests never touches development data |
 | Errors are shown on the page | Phones have no developer console, so a blank page would give no clue what went wrong |
 | `uuid` library for ids | The browser's built-in `crypto.randomUUID()` only works on https or localhost, and testing on a phone over Wi-Fi is neither |
 | React + TypeScript + Vite | Industry-standard frontend stack; TypeScript catches mistakes like a misspelled stat name before the app runs |
