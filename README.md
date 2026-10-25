@@ -109,6 +109,10 @@ The database is published on port **5433** instead of Postgres's usual 5432, so 
 | `uv run pytest` | run the server tests |
 | `uv run ruff check` | check the Python code for common mistakes |
 | `uv run ruff format` | tidy the Python code's formatting |
+| `uv run alembic upgrade head` | bring your database's tables up to date (the server's container does this itself when it starts) |
+| `uv run alembic revision --autogenerate -m "what changed"` | after changing `app/models.py`, write a migration for it |
+
+**Migrations** are step-by-step instructions for building and changing the database's tables, kept in `api/migrations/versions/`. Instead of editing tables by hand, every change is a new migration file, so the laptop, the test database, and the hosted database can each be brought to exactly the same shape, and a change can be undone. A test fails if `app/models.py` changes without a matching migration.
 
 ### Try it on your phone
 
@@ -127,7 +131,8 @@ Things to know:
 ```
 app/                 Phase 1: React + TypeScript stat entry app (Vite)
 api/                 Phase 2: FastAPI server
-  app/                 the server code (main.py, config.py, db.py)
+  app/                 the server code (main.py, config.py, db.py, models.py)
+  migrations/          Alembic migrations that build the database's tables
   tests/               pytest tests
   db-init/             creates the test database the first time Postgres starts
   Dockerfile           how to package the server as a container
@@ -201,8 +206,22 @@ When a tap breaks a rule, the screen shows the plain reason ("No set is in progr
 
 Phone-friendly details: tap targets are at least 52px tall on the tap screen and 56px elsewhere; text boxes use 16px+ text so iPhones don't zoom in; double-tap zoom is off (`touch-action: manipulation`); the jersey number box brings up the number keypad; deleting a player takes two taps.
 
+### Server database (`api/app/models.py`)
+
+| Table | Holds |
+|---|---|
+| `users` | email and password hash (never the password itself) |
+| `teams`, `players`, `matches` | the same as on the phone, with the same ids |
+| `team_members` | who belongs to which team, as a `keeper` (can record) or `viewer` (read-only) |
+| `events` | every tap, with the same fields as on the phone, plus when it reached the server and who uploaded it |
+
+- Teams, players, matches, and events keep the ids the phone made. A tap's id is its primary key, so uploading the same tap twice can't create a second row. That's what makes retried uploads safe.
+- CHECK constraints make the database itself refuse impossible values (a side that isn't home or away, a rotation outside 1–6, best of 4, a team playing itself), as a last line of defense behind the app's own checks.
+- Type-specific details (serve type, attack row, lineups, the undone action) are stored as JSON in `events.detail`.
+
 ### Tests
 
+- Server tests run against a real Postgres. Each run empties the `volleyball_test` database and rebuilds it with the migrations; each test runs in a transaction that's rolled back afterwards, so tests can't affect each other. `tests/factories.py` saves test rows with sensible defaults.
 - Logic and storage tests run in Node. `app/src/test/matchScript.ts` plays a match tap by tap, e.g. `new MatchScript().startSet().point('home', 3)`.
 - Storage tests use `fake-indexeddb`, a pretend IndexedDB (`app/src/test/setup.ts`).
 - Screen tests (`*.test.tsx`) use React Testing Library in a pretend browser (jsdom): they type and tap the way a person would. `app/src/test/renderApp.tsx` and `fixtures.ts` set up the app and two teams.

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "The server for the volleyball stat tracker: stores taps, accounts, and the live box score link."
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.20.1",
     "fastapi>=0.162.0",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.1",
@@ -31,3 +32,7 @@ line-length = 120
 [tool.ruff.lint]
 # E/F: common errors, I: import order, UP: modern Python syntax, B: likely bugs
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Generated migrations can contain long SQL strings that can't be split.
+"migrations/versions/*" = ["E501"]
