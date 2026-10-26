@@ -132,7 +132,7 @@ Things to know:
 app/                 Phase 1: React + TypeScript stat entry app (Vite)
 api/                 Phase 2: FastAPI server
   app/                 the server code: main.py, config.py, db.py, models.py, schemas.py,
-                       security.py, auth.py, permissions.py, teams.py
+                       security.py, auth.py, permissions.py, teams.py, sync.py
   migrations/          Alembic migrations that build the database's tables
   tests/               pytest tests
   db-init/             creates the test database the first time Postgres starts
@@ -236,7 +236,22 @@ Phone-friendly details: tap targets are at least 52px tall on the tap screen and
 - **Login errors don't leak information:** a wrong password and an unknown email get the same answer and take about the same time, so nobody can test which emails have accounts.
 - **Roles are per team:** a **keeper** can record matches and manage members; a **viewer** can only look. To anyone not on a team, the team appears not to exist (404). A team always keeps at least one keeper.
 - **Secrets:** tokens are signed with `JWT_SECRET`. Laptops use a development value; the server refuses to start with `ENVIRONMENT=production` unless a real secret is set.
-- Try it at http://localhost:8000/docs: sign up, copy the `access_token`, click **Authorize**, and paste it.
+- Try it at http://localhost:8000/docs: sign up, copy the `accessToken`, click **Authorize**, and paste it.
+
+### Syncing (`api/app/sync.py`)
+
+| Endpoint | What it does |
+|---|---|
+| `POST /sync/upload` | save a batch of teams, players, matches, and taps from the phone (up to 1,000 taps at a time) |
+| `GET /sync/download` | your teams (with your role on each), their rosters, and their matches |
+| `GET /matches/{id}/events?afterSeq=N` | a match's taps in order; `afterSeq` skips the ones you already have |
+
+- **Retrying is safe.** Every item keeps the id the phone gave it, and taps are saved with `INSERT … ON CONFLICT (id) DO NOTHING`, so a tap the server already has is skipped. The reply says how many of each were new (`saved`) and how many the server already had (`alreadyHad`). If the connection drops before the phone hears back, it just sends the same batch again.
+- **All or nothing.** If anything in a batch is refused, nothing from it is saved, so the phone never has to work out which half made it.
+- **One device per match.** Two phones recording the same match would both make a tap #5. The database allows only one tap per number per match, so the second phone gets a 409 with a plain explanation.
+- **Who can upload:** uploading a new team makes you its keeper. Changing a team or its roster, starting a match, or adding taps needs a keeper. A match belongs to both of its teams, so members of either team can see it.
+- **The JSON uses the app's names** (`matchId`, `setNumber`), so the phone sends what it already saves without renaming anything. Python code still uses `match_id`; Pydantic converts between the two.
+- **Edits are uploaded too:** a renamed team or a changed jersey number replaces the server's copy. A player can't move to another team, because their old taps would then count for the wrong team.
 
 ### Tests
 
@@ -282,6 +297,9 @@ It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve ty
 | Docker Compose for local Postgres | One command starts a clean database; nothing to install or configure on Windows |
 | JWT login tokens, Argon2 password hashes | Standard, well-understood choices: the server doesn't have to look anything up to check a token, and Argon2 is the current recommendation for storing passwords |
 | Outsiders get "not found" for a team, not "forbidden" | Doesn't reveal that a team exists to people who aren't on it |
+| Upload whole batches, keyed by the phone's ids | A phone courtside loses signal mid-upload. Skipping ids the server already has makes "send it again" always safe, with no extra bookkeeping on the phone |
+| The server's JSON uses camelCase, like the app | The app's saved data goes up and comes back unchanged, so there's no renaming code to get wrong |
+| Duplicate tap numbers are refused, not merged | Merging two phones' taps would need conflict rules; one device per match keeps the event log simple and in order |
 | Tests use their own database | `volleyball_test` is separate, so running tests never touches development data |
 | Errors are shown on the page | Phones have no developer console, so a blank page would give no clue what went wrong |
 | `uuid` library for ids | The browser's built-in `crypto.randomUUID()` only works on https or localhost, and testing on a phone over Wi-Fi is neither |

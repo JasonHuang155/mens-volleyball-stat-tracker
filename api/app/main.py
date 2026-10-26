@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from app import auth, teams
+from app import auth, sync, teams
 from app.db import SessionDep
 
 app = FastAPI(
@@ -11,6 +11,7 @@ app = FastAPI(
 )
 app.include_router(auth.router)
 app.include_router(teams.router)
+app.include_router(sync.router)
 
 
 @app.get("/health", tags=["server"])

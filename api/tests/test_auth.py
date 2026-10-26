@@ -16,7 +16,7 @@ def test_signing_up_makes_an_account_and_logs_you_in(client: TestClient, session
     assert response.status_code == 201
     body = response.json()
     assert body["user"]["email"] == "sam@example.com"  # emails are stored in lowercase
-    assert body["token_type"] == "bearer" and body["access_token"]
+    assert body["tokenType"] == "bearer" and body["accessToken"]
 
     user = session.scalar(select(User).where(User.email == "sam@example.com"))
     assert user is not None
