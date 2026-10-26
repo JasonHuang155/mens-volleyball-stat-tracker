@@ -1,6 +1,19 @@
 import Dexie, { type Table } from 'dexie'
 import type { Match, MatchEvent, Player, Team } from '../domain/types.ts'
 
+/** What the server has for a team, player, or match: a copy of it as it was last uploaded. */
+export interface UploadedRow {
+  /** "team:<id>", "player:<id>", or "match:<id>". */
+  key: string
+  json: string
+}
+
+/** How far a match's taps have been uploaded. Taps are only ever added, so the rest are the ones after this. */
+export interface UploadedTaps {
+  matchId: string
+  lastSeq: number
+}
+
 /**
  * The database built into the browser (IndexedDB), opened with Dexie.
  * It lives on the phone, works offline, and survives refreshes.
@@ -10,6 +23,8 @@ export type StatsDatabase = Dexie & {
   players: Table<Player, string>
   matches: Table<Match, string>
   events: Table<MatchEvent, string>
+  uploadedRows: Table<UploadedRow, string>
+  uploadedTaps: Table<UploadedTaps, string>
 }
 
 export function createDatabase(name = 'volleyball-stats'): StatsDatabase {
@@ -34,6 +49,14 @@ export function createDatabase(name = 'volleyball-stats'): StatsDatabase {
       await tx.table('matches').clear()
       await tx.table('events').clear()
     })
+
+  // Version 3: keeps track of what's been uploaded to the server (see sync/upload.ts).
+  // [matchId+seq] finds a match's taps after a given number without reading the rest.
+  db.version(3).stores({
+    events: 'id, matchId, playerId, [matchId+seq]',
+    uploadedRows: 'key',
+    uploadedTaps: 'matchId',
+  })
 
   return db
 }

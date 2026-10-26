@@ -1,16 +1,19 @@
 import { cleanup, render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { afterEach, beforeEach } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import App from '../App.tsx'
 import { db } from '../db/database.ts'
 
-// Every screen test starts with an empty database and a blank page.
+// Every screen test starts with an empty database and a blank page, with nobody
+// logged in and the real fetch back in place of any pretend server (test/fakeServer.ts).
 beforeEach(async () => {
   await Promise.all(db.tables.map((table) => table.clear()))
 })
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
+  localStorage.clear()
 })
 
 /**

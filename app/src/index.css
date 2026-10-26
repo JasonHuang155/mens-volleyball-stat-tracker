@@ -706,6 +706,38 @@ h2 {
   color: var(--accent-text);
 }
 
+/* ---- Upload status ---- */
+
+.sync-status {
+  min-height: 44px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.sync-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.sync-good .sync-dot {
+  background: var(--good);
+}
+
+.sync-problem {
+  color: var(--danger);
+}
+
+.sync-problem .sync-dot {
+  background: var(--danger);
+}
+
 /* ---- Top links (Home, Box score) ---- */
 
 .top-links {

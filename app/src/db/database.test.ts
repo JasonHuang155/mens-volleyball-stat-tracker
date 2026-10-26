@@ -23,3 +23,28 @@ describe('upgrading from the one-team version', () => {
     await db.delete()
   })
 })
+
+describe('upgrading to the version that tracks uploads', () => {
+  it('keeps every match and tap, all waiting to upload', async () => {
+    const name = `test-${uuidv4()}`
+    const old = new Dexie(name)
+    old.version(2).stores({
+      teams: 'id',
+      players: 'id, teamId',
+      matches: 'id, homeTeamId, awayTeamId, createdAt',
+      events: 'id, matchId, playerId',
+    })
+    await old.table('matches').add({ id: 'm1', homeTeamId: 't1', awayTeamId: 't2', bestOf: 5, createdAt: '2026-10-25' })
+    await old.table('events').bulkAdd([
+      { id: 'e1', matchId: 'm1', seq: 1 },
+      { id: 'e2', matchId: 'm1', seq: 2 },
+    ])
+    old.close()
+
+    const db = createDatabase(name)
+    expect(await db.matches.count()).toBe(1)
+    expect(await db.events.where('[matchId+seq]').between(['m1', 2], ['m1', Dexie.maxKey]).primaryKeys()).toEqual(['e2'])
+    expect(await db.uploadedTaps.count()).toBe(0)
+    await db.delete()
+  })
+})

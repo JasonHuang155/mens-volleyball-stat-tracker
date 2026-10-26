@@ -102,6 +102,8 @@ uv run uvicorn app.main:app --reload   # run the server at http://localhost:8000
 
 Or run the database and the server together in Docker with `docker compose up --build`. `docker compose down` stops everything; your data stays in a Docker volume.
 
+**To log in and upload from the app while developing,** run the server in Docker (`docker compose up -d --build`) and the app (`npm run dev` in `app/`). The app looks for the server at its own address on port 8000, so this also works from a phone (see below).
+
 The database is published on port **5433** instead of Postgres's usual 5432, so it doesn't clash with a PostgreSQL installed directly on Windows. Inside Docker, the server reaches it at `db:5432`.
 
 | Command (from `api/`) | What it does |
@@ -124,7 +126,8 @@ The database is published on port **5433** instead of Postgres's usual 5432, so 
 Things to know:
 - Campus and public Wi-Fi often block devices from reaching each other. If the phone can't load the page, turn on the phone's hotspot and connect the computer to it.
 - If something goes wrong, the page says so instead of staying blank: "Loading…" while starting, "The app couldn't start" with the reason if a script fails, a message for browsers too old to run it, and "Something went wrong" with the error if a screen crashes.
-- Data saved on the phone stays on the phone, separate from the computer's browser. It's also tied to that exact address. If the computer's address changes (a different network), the phone opens a fresh, empty app; the old data is still there under the old address. Phase 2 puts the app at one permanent web address and syncs data to a server.
+- Data saved on the phone stays on the phone, separate from the computer's browser. It's also tied to that exact address. If the computer's address changes (a different network), the phone opens a fresh, empty app; the old data is still there under the old address.
+- To upload from the phone, start the server in Docker on the computer and log in on the Account screen (tap the status line at the top of Home). The phone reaches the server at the computer's address on port 8000.
 
 ## Repository layout
 
@@ -172,20 +175,43 @@ Everything is saved on the phone in IndexedDB, the database built into every bro
 | `players` | roster: jersey number, position, and an optional name |
 | `matches` | home team, away team, best of 3 or 5, when it was created |
 | `events` | every tap: the list the volleyball logic replays |
+| `uploadedRows` | a copy of each team, player, and match as it was last uploaded to the server |
+| `uploadedTaps` | for each match, the number of the last tap uploaded |
 
 | File | What it does |
 |---|---|
-| `database.ts` | Table definitions. Version 2 added home/away teams; upgrading clears matches saved by the one-team version 1 (teams and players are kept) |
+| `database.ts` | Table definitions. Version 2 added home/away teams; upgrading clears matches saved by the one-team version 1 (teams and players are kept). Version 3 added the two upload tables |
 | `roster.ts` | Teams and players. Jersey numbers must be unique per team, and a player who has played in a match can't be deleted |
 | `matches.ts` | Matches, plus `recordTap()`, `recordFollowUpTap()`, `undoLastTap()`: check a tap with the volleyball logic, then save it |
 
 Each tap is checked and saved inside one database transaction. Transactions on the same table run one at a time, so two fast taps can't get the same `seq` number.
 
+### Uploading (`app/src/sync/`)
+
+Taps are always saved on the phone first. While you're logged in, the app copies them to the server in the background whenever it can.
+
+| File | What it does |
+|---|---|
+| `api.ts` | Sends requests to the server. A refusal becomes an `ApiError` carrying the server's reason; no connection (or no answer within 20 seconds) becomes an `OfflineError` |
+| `login.ts` | Logs in or makes an account, and keeps the login in the browser's localStorage so it lasts after the app is closed |
+| `upload.ts` | Works out what the server doesn't have yet, and uploads it |
+| `SyncProvider.tsx`, `useSync.ts` | Runs uploads in the background and shares the login and upload status with every screen |
+| `describeSync.ts` | The status line at the top of Home: "Everything is uploaded", "12 taps waiting to upload", "Offline. 12 taps will upload when you're back online." |
+
+- **What's waiting:** nothing in the app marks data as changed. Instead the phone keeps a copy of each team, player, and match as it was last uploaded, and the number of the last tap uploaded for each match. Anything that differs from its copy, and every tap after that number, is waiting.
+- **When:** a second after anything is saved (so a burst of taps goes up together), right after logging in, when you press **Upload now**, and after a failure every 30 seconds and as soon as the phone is back online.
+- **Order:** teams, players, and matches first, because taps refer to them. Then each match's taps in order, 500 per request.
+- **Half-finished uploads:** each request that succeeds is remembered straight away. If the connection drops, the rest goes next time. Sending something twice is harmless, because the server skips what it has.
+- **Refusals:** if the server refuses one match's taps (say, another phone is recording it), the other matches still upload, and the status line shows the server's reason. If the login has run out, you're logged out with a message; your stats stay on the phone.
+- **Switching accounts:** logging in as someone else uploads everything again, to the new account.
+- **Which server:** the published app is told its server's address when it's built (`VITE_API_URL`). While developing, it uses the same address as the page with port 8000. The GitHub Pages site has no server yet, so its Account screen says so.
+
 ### Screens (`app/src/screens/`)
 
 | Address | Screen |
 |---|---|
-| `/` | Home: your teams, a New match button, and every match with where it stands ("Rivals at Huskies · Set 2 · 10–12") |
+| `/` | Home: the upload status, your teams, a New match button, and every match with where it stands ("Rivals at Huskies · Set 2 · 10–12") |
+| `/account` | Log in or make an account; once logged in, the upload status, Upload now, and Log out |
 | `/teams/:teamId` | Roster: add players (number, position, optional name), tap a player to edit or delete them |
 | `/new-match` | New match: away team, home team, best of 3 or 5 |
 | `/matches/:matchId` | The match: scoreboard, then both lineups before each set, or the courtside tap screen during a set |
@@ -252,6 +278,7 @@ Phone-friendly details: tap targets are at least 52px tall on the tap screen and
 - **Who can upload:** uploading a new team makes you its keeper. Changing a team or its roster, starting a match, or adding taps needs a keeper. A match belongs to both of its teams, so members of either team can see it.
 - **The JSON uses the app's names** (`matchId`, `setNumber`), so the phone sends what it already saves without renaming anything. Python code still uses `match_id`; Pydantic converts between the two.
 - **Edits are uploaded too:** a renamed team or a changed jersey number replaces the server's copy. A player can't move to another team, because their old taps would then count for the wrong team.
+- **Which web pages can call it (CORS):** browsers block a page from calling a server at a different address unless the server allows it. The server allows the app on GitHub Pages (`CORS_ORIGINS`), and, on development servers only, copies of the app on this computer or your home Wi-Fi. Logins travel in a header rather than a cookie, so no cookies are allowed from other sites.
 
 ### Tests
 
@@ -259,6 +286,7 @@ Phone-friendly details: tap targets are at least 52px tall on the tap screen and
 - Logic and storage tests run in Node. `app/src/test/matchScript.ts` plays a match tap by tap, e.g. `new MatchScript().startSet().point('home', 3)`.
 - Storage tests use `fake-indexeddb`, a pretend IndexedDB (`app/src/test/setup.ts`).
 - Screen tests (`*.test.tsx`) use React Testing Library in a pretend browser (jsdom): they type and tap the way a person would. `app/src/test/renderApp.tsx` and `fixtures.ts` set up the app and two teams.
+- App tests never call the real server. `app/src/test/fakeServer.ts` swaps the browser's `fetch` for a pretend server that answers as the test says (accept, refuse with a reason, or no connection) and records what the app sent.
 
 ## Stats tracked
 
@@ -266,11 +294,13 @@ For both teams, the box score matches the official NCAA box score: sets played, 
 
 It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve type (jump spin, jump float, standing float), and front/back row attacks.
 
-## Known limits (end of Phase 1)
+## Known limits
 
-- Data lives only on the device that recorded it. Phase 2 adds syncing to a server.
-- The app has to be loaded from a running dev server; it can't open with no connection yet. Phase 2 deploys it and makes it load offline.
-- One device records a match. Two stat keepers on the same match isn't supported.
+- Uploading goes one way. A new phone doesn't download your teams and matches from the server yet.
+- The site on GitHub Pages can't upload until the server is hosted online (a later Phase 2 step).
+- The app can't open with no connection yet. A later Phase 2 step makes it load offline.
+- One device records a match. The server refuses a second phone's taps for a match that's already being recorded.
+- Deleting a player (only possible if they never played) doesn't remove them from the server.
 - Only the last play can be undone; older taps can't be edited.
 - Substitution limits and libero serving rules aren't enforced.
 
@@ -299,6 +329,8 @@ It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve ty
 | Outsiders get "not found" for a team, not "forbidden" | Doesn't reveal that a team exists to people who aren't on it |
 | Upload whole batches, keyed by the phone's ids | A phone courtside loses signal mid-upload. Skipping ids the server already has makes "send it again" always safe, with no extra bookkeeping on the phone |
 | The server's JSON uses camelCase, like the app | The app's saved data goes up and comes back unchanged, so there's no renaming code to get wrong |
+| The phone works out what to upload by comparing with its copy of what it uploaded | No "changed" flag that every screen that saves has to remember to set. An edit made during an upload doesn't match the copy, so it's noticed and goes next time |
+| The login is kept in localStorage and sent in a header | It survives closing the app for the 30 days a login lasts. A header, unlike a cookie, means the server never has to accept cookies from another site |
 | Duplicate tap numbers are refused, not merged | Merging two phones' taps would need conflict rules; one device per match keeps the event log simple and in order |
 | Tests use their own database | `volleyball_test` is separate, so running tests never touches development data |
 | Errors are shown on the page | Phones have no developer console, so a blank page would give no clue what went wrong |

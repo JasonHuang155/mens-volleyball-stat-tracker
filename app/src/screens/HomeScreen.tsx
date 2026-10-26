@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import { errorMessage } from '../components/errorMessage.ts'
 import { matchSummary } from '../components/matchSummary.ts'
 import { playerCount } from '../components/playerCount.ts'
+import SyncStatus from '../components/SyncStatus.tsx'
 import { db } from '../db/database.ts'
 import { getEvents, listMatches } from '../db/matches.ts'
 import { createTeam, listTeams } from '../db/roster.ts'
@@ -22,6 +23,7 @@ function HomeScreen() {
   return (
     <main className="screen">
       <h1>Volleyball Stat Tracker</h1>
+      <SyncStatus />
 
       <section className="card" aria-label="Teams">
         <h2>Teams</h2>
