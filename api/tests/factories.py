@@ -6,14 +6,28 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models import Event, Match, Player, Team, User
+from app.models import Event, Match, Player, Team, TeamMember, User
+from app.security import create_access_token, hash_password
 
 
-def make_user(session: Session, email: str | None = None) -> User:
-    user = User(email=email or f"{uuid.uuid4().hex[:8]}@example.com", password_hash="not-a-real-hash")
+def make_user(session: Session, email: str | None = None, password: str = "correct horse battery") -> User:
+    user = User(email=email or f"{uuid.uuid4().hex[:8]}@example.com", password_hash=hash_password(password))
     session.add(user)
     session.flush()  # sends the INSERT now, so database rules are checked right away
     return user
+
+
+def auth_headers(user: User) -> dict[str, str]:
+    """The header a logged-in app sends with each request."""
+    token, _ = create_access_token(user.id)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def make_member(session: Session, team: Team, user: User, role: str = "keeper") -> TeamMember:
+    member = TeamMember(team_id=team.id, user_id=user.id, role=role)
+    session.add(member)
+    session.flush()
+    return member
 
 
 def make_team(session: Session, created_by: User, name: str = "Huskies") -> Team:

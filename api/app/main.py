@@ -1,20 +1,20 @@
-from typing import Annotated
-
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
 
-from app.db import get_session
+from app import auth, teams
+from app.db import SessionDep
 
 app = FastAPI(
     title="Volleyball Stat Tracker API",
     description="Stores every tap from the stat tracker app, plus accounts and the live box score link.",
 )
+app.include_router(auth.router)
+app.include_router(teams.router)
 
 
-@app.get("/health")
-def health(session: Annotated[Session, Depends(get_session)]) -> dict[str, str]:
+@app.get("/health", tags=["server"])
+def health(session: SessionDep) -> dict[str, str]:
     """Is the server up, and can it reach the database? Hosting services call this to check on the server."""
     try:
         session.execute(text("SELECT 1"))

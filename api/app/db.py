@@ -1,5 +1,7 @@
 from collections.abc import Iterator
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -12,7 +14,10 @@ SessionLocal = sessionmaker(engine)
 
 
 def get_session() -> Iterator[Session]:
-    """Gives each request its own database session, closed when the request ends.
-    Routes ask for it with `session: Session = Depends(get_session)`."""
+    """Gives each request its own database session, closed when the request ends."""
     with SessionLocal() as session:
         yield session
+
+
+# Routes ask for a session by adding a parameter `session: SessionDep`.
+SessionDep = Annotated[Session, Depends(get_session)]

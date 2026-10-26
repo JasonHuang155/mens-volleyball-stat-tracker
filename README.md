@@ -131,7 +131,8 @@ Things to know:
 ```
 app/                 Phase 1: React + TypeScript stat entry app (Vite)
 api/                 Phase 2: FastAPI server
-  app/                 the server code (main.py, config.py, db.py, models.py)
+  app/                 the server code: main.py, config.py, db.py, models.py, schemas.py,
+                       security.py, auth.py, permissions.py, teams.py
   migrations/          Alembic migrations that build the database's tables
   tests/               pytest tests
   db-init/             creates the test database the first time Postgres starts
@@ -219,6 +220,24 @@ Phone-friendly details: tap targets are at least 52px tall on the tap screen and
 - CHECK constraints make the database itself refuse impossible values (a side that isn't home or away, a rotation outside 1–6, best of 4, a team playing itself), as a last line of defense behind the app's own checks.
 - Type-specific details (serve type, attack row, lineups, the undone action) are stored as JSON in `events.detail`.
 
+### Accounts and roles (`api/app/auth.py`, `teams.py`, `permissions.py`)
+
+| Endpoint | What it does |
+|---|---|
+| `POST /auth/signup` | make an account (email + password of 8+ characters); you're logged in straight away |
+| `POST /auth/login` | log in; returns a token |
+| `GET /auth/me` | the account the token belongs to |
+| `GET /teams/{id}/members` | everyone on a team and their role (any member) |
+| `PUT /teams/{id}/members` | add someone by email, or change their role (keepers only) |
+| `DELETE /teams/{id}/members/{user_id}` | remove someone (keepers), or leave the team yourself |
+
+- **Passwords** are never stored. The server keeps an Argon2 hash, a scrambled version that can check a password but can't be turned back into it.
+- **Logging in** returns a token (a signed JWT saying "this is user X until date Y"). The app sends it with every request in an `Authorization: Bearer …` header. Tokens last 30 days, because the app is often offline courtside.
+- **Login errors don't leak information:** a wrong password and an unknown email get the same answer and take about the same time, so nobody can test which emails have accounts.
+- **Roles are per team:** a **keeper** can record matches and manage members; a **viewer** can only look. To anyone not on a team, the team appears not to exist (404). A team always keeps at least one keeper.
+- **Secrets:** tokens are signed with `JWT_SECRET`. Laptops use a development value; the server refuses to start with `ENVIRONMENT=production` unless a real secret is set.
+- Try it at http://localhost:8000/docs: sign up, copy the `access_token`, click **Authorize**, and paste it.
+
 ### Tests
 
 - Server tests run against a real Postgres. Each run empties the `volleyball_test` database and rebuilds it with the migrations; each test runs in a transaction that's rolled back afterwards, so tests can't affect each other. `tests/factories.py` saves test rows with sensible defaults.
@@ -261,6 +280,8 @@ It also tracks coaching stats NCAA doesn't record: pass rating (0–3), serve ty
 | FastAPI + SQLAlchemy + Postgres | Widely used Python web stack. Postgres is a real database with the features Phase 3 needs |
 | uv for Python libraries | One fast tool for Python and its libraries, with a lock file so the laptop, CI, and the server run identical versions |
 | Docker Compose for local Postgres | One command starts a clean database; nothing to install or configure on Windows |
+| JWT login tokens, Argon2 password hashes | Standard, well-understood choices: the server doesn't have to look anything up to check a token, and Argon2 is the current recommendation for storing passwords |
+| Outsiders get "not found" for a team, not "forbidden" | Doesn't reveal that a team exists to people who aren't on it |
 | Tests use their own database | `volleyball_test` is separate, so running tests never touches development data |
 | Errors are shown on the page | Phones have no developer console, so a blank page would give no clue what went wrong |
 | `uuid` library for ids | The browser's built-in `crypto.randomUUID()` only works on https or localhost, and testing on a phone over Wi-Fi is neither |
